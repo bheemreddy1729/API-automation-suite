@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(claude mcp list 2>&1)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "atlassian",
+    "http-explorer"
+  ]
+}

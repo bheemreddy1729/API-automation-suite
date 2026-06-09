@@ -1,0 +1,29 @@
+# Maven
+target/
+
+# Secrets / local config — never commit
+.env
+*.local
+cloud_auth.json
+.mcp.json
+# Tenant secrets (use tenants.properties.example as the committed template)
+src/test/resources/config/tenants.properties
+
+# Allure
+.allure/
+allure-results/
+allure-report/
+
+# Eclipse (keep .project/.classpath/.settings so the project opens directly;
+# ignore only transient Eclipse output)
+bin/
+.metadata/
+
+# IntelliJ / VS Code
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
