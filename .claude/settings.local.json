@@ -1,7 +1,36 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(claude mcp list 2>&1)"
+      "PowerShell(claude mcp list 2>&1)",
+      "Bash(java -version)",
+      "Bash(mvn -version)",
+      "Bash(nslookup stage-tts-api.laerdalblr.in)",
+      "PowerShell(mvn test 2>&1)",
+      "mcp__atlassian__getAccessibleAtlassianResources",
+      "mcp__atlassian__getVisibleJiraProjects",
+      "mcp__atlassian__getJiraIssue",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "Bash(mkdir -p /tmp/pptx_extract)",
+      "Read(//tmp/**)",
+      "Bash(python -c \"import zipfile; zipfile.ZipFile\\(r'C:/Users/INBRE2/OneDrive - Laerdal Medical AS/AI_Projects/API-automation-suite/docs/QA_Automation_Overview.pptx'\\).extractall\\('.'\\)\")",
+      "Bash(ls -la ppt/notesSlides/)",
+      "Bash([ -f \"$f\" ])",
+      "Bash(python -c \"import json; json.load\\(open\\('.mcp.json'\\)\\); print\\('.mcp.json is valid JSON'\\)\")",
+      "mcp__atlassian__createIssueLink",
+      "mcp__atlassian__addCommentToJiraIssue",
+      "mcp__atlassian__editJiraIssue",
+      "Bash(rm -f src/test/java/com/laerdal/api/tests/Tts1330PostApiTest.java)",
+      "Bash(rm -rf target/allure-results target/surefire-reports)",
+      "PowerShell(mvn -q test-compile 2>&1)",
+      "PowerShell(if \\($?\\) { \"COMPILE OK - 4-case class matches approved plan\" })",
+      "Bash(code \"qa/plans/LBVOICESER-1330-plan.md\" \"qa/plans/LBVOICESER-1335-plan.md\")",
+      "PowerShell(mvn -q test-compile)",
+      "Bash(code \"src/test/java/com/laerdal/api/tests/TtsStreamPostApiTest.java\")",
+      "PowerShell(mvn test \"-Dtest=Tts1330PostApiTest,TtsStreamPostApiTest\")",
+      "PowerShell(mvn -q allure:report)",
+      "mcp__atlassian__createJiraIssue",
+      "mcp__atlassian__getTransitionsForJiraIssue",
+      "mcp__atlassian__transitionJiraIssue"
     ]
   },
   "enabledMcpjsonServers": [

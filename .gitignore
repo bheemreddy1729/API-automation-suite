@@ -14,6 +14,9 @@ src/test/resources/config/tenants.properties
 allure-results/
 allure-report/
 
+# QA loop transient artifacts (test plans opened for review by /qa-start)
+qa/
+
 # Eclipse (keep .project/.classpath/.settings so the project opens directly;
 # ignore only transient Eclipse output)
 bin/

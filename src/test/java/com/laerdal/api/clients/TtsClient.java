@@ -46,4 +46,32 @@ public final class TtsClient {
         .when()
                 .post(EnvConfig.ttsPath());
     }
+
+    /** Stream-synthesize using an explicit bearer token and a {@link TtsRequest} body. */
+    public static Response synthesizeStream(String bearerToken, TtsRequest body) {
+        return given()
+                .spec(SpecFactory.request())
+                .filter(new AllureRestAssured())
+                .accept("*/*")
+                .header("Authorization", "Bearer " + bearerToken)
+                .body(body)
+        .when()
+                .post(EnvConfig.ttsStreamPath());
+    }
+
+    /** Stream-synthesize a {@link TtsRequest} using the default tenant's cached token. */
+    public static Response synthesizeStream(TtsRequest body) {
+        return synthesizeStream(AuthClient.defaultToken(), body);
+    }
+
+    /** Call the stream endpoint with a {@link TtsRequest} but no Authorization header (negative tests). */
+    public static Response synthesizeStreamWithoutAuth(TtsRequest body) {
+        return given()
+                .spec(SpecFactory.request())
+                .filter(new AllureRestAssured())
+                .accept("*/*")
+                .body(body)
+        .when()
+                .post(EnvConfig.ttsStreamPath());
+    }
 }
