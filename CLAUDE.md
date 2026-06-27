@@ -1,36 +1,55 @@
-# CLAUDE.md — conventions for this repo
+# CLAUDE.md — conventions for the QA Engine repo
 
-API test automation: **Java 11 + REST Assured + JUnit 5 + Maven**, Jira/Xray
-traceability, Allure reporting. Opens as an Eclipse project.
+This repo is the **QA Engine** (the central "brain") of the Enterprise QA Agent platform:
+**Python + LangGraph**, model- & framework-agnostic, multi-tenant, with **federated execution**.
+It does NOT contain a product test suite — it *generates* tests and dispatches them to run in
+each team's own repo/CI. Architecture: [docs/enterprise-qa-agent-platform.md](docs/enterprise-qa-agent-platform.md).
+Engine details: [engine/README.md](engine/README.md).
 
-## Commands
-- `mvn test` — run all tests (uses `config/env.properties` defaults).
-- `mvn test -Dtest=ClassName` — run one class.
-- `mvn allure:serve` — open the Allure report.
-- `mvn -DskipTests eclipse:eclipse` — regenerate Eclipse classpath from `pom.xml`.
+> The Java/REST-Assured TTS test suite that used to live here was removed when this repo became
+> the engine — see [docs/java-suite-history.md](docs/java-suite-history.md) for recovery refs.
+
+## Commands (run from `engine/`)
+- `pip install -e ".[dev]"` — install the engine + dev tools into a venv (`engine/.venv`).
+- `pytest` (or `python tests/test_tenant_isolation.py`) — run engine unit/isolation tests.
+- `python -m qa_agent.models.azure_openai` — Azure model pre-flight (booleans only, no secrets).
+- `python scripts/azure_smoke.py` — live Azure connection smoke test.
 
 ## Conventions
-- **Config:** never hard-code base URIs/tokens in tests. Read everything through
-  `com.laerdal.api.config.EnvConfig`. Resolution order: `-Dkey` → env var
-  (`UPPER_SNAKE_CASE`) → `config/env.properties` → default.
-- **Request setup:** always start from `SpecFactory.request()` (sets base URI/path,
-  JSON headers, auth, timeout, and the Allure request/response filter). Assert
-  status via `SpecFactory.okJson()` / `jsonStatus(int)`.
-- **Structure:** reusable per-resource call wrappers go in `clients/`; test classes
-  in `tests/`; payload fixtures in `src/test/resources/testdata/`.
-- **Secrets:** only via env vars / git-ignored `.env`. Never commit tokens; never
-  put secrets in `env.properties`.
+- **Config / secrets:** never hard-code endpoints, tokens, repos, or model names. Read everything
+  from env / the git-ignored `engine/.env` (loaded via `python-dotenv`). Secrets only via env vars
+  / `.env`, never committed. Resolution mirrors the platform: `-D`/explicit → env var → `.env` → default.
+- **Tenant isolation (§9.1):** every boundary call (Jira / GitHub / model / secrets) takes an
+  explicit `TenantContext` — there is **no ambient/default tenant**. Enforce per-tenant project
+  scope with `assert_project_allowed`. A missing tenant must fail loudly (tests guard this).
+- **Tenancy is data, not code (§9.2):** a tenant is a `TenantConfig` record (Jira project, target
+  repo, language, credential refs) — never a subclass or a separate deploy.
+- **Jira access goes through `JiraGateway`** (`qa_agent/jira/client.py`). The autonomous loop uses
+  the **REST backend** (headless, per-tenant token); **Rovo MCP** is the future interactive/
+  act-as-user backend behind the same seam. Don't call Jira from nodes except via the gateway.
+- **Models go through the router** (`qa_agent/models/router.py` → `build_chat_model`): pick a
+  deployment by `TaskKind` (coding / reasoning / classification). Never hard-code a model.
+- **Execution is federated (§9.3):** the engine generates tests and triggers the *team's* CI; it
+  never runs product tests or holds a team's source/secrets. Results = **JUnit XML → Xray** (no Allure).
+- **Identity (MVP):** user-role assumption — the QA lead's Jira API token + a user GitHub PAT. No
+  service account yet.
 
-## Jira / Xray traceability
-- Tag each test that maps to Jira with the `xray-junit-extensions` annotations:
-  `@Requirement({"<JIRA-STORY-KEY>"})` and `@XrayTest(key = "<XRAY-TEST-KEY>")`
-  (package `app.getxray.xray.junit.customjunitxml.annotations`; `@XrayTest` uses a
-  `key` attribute, `@Requirement` takes a `String[]` value).
-- Results import to Xray Cloud uses `scripts/xray-auth` + `scripts/xray-import`
-  (authenticate with client id/secret, POST the enhanced JUnit XML).
+## Structure (`engine/src/qa_agent/`)
+- `tenant.py` — `TenantContext` (required id, no default).
+- `config.py` — `TenantConfig` + test-language resolution (default **python**) + project boundary.
+- `models/` — task-aware router + Azure backend (`build_chat_model`).
+- `jira/` — `JiraGateway` protocol + REST backend (port of the proven Java client).
+- `generation/` — pluggable per-stack generators (language chosen at generation time).
+- `graph.py` + `nodes/` — the loop as a LangGraph state graph (fetch → context_check → plan_gate →
+  generate → dispatch_execution → publish_results); headless Jira-driven gates via interrupt/resume.
+- `exec/` — GitHub dispatch/poll + Xray import.
 
-## Test style
-- One behaviour per `@Test`; use `@DisplayName` for readable report titles.
-- Cover happy-path, negative/error cases, auth, and a response-time guard.
-- Prefer Hamcrest matchers in `.body(...)`; validate JSON schema where useful via
-  `json-schema-validator`.
+## Loop logic reference
+The proven loop behavior (JQL, context-check scoring, insufficient-comment + sentinel, test-plan and
+generation templates, Test-card creation/linking) is specified in `.claude/prompts/` and
+`.claude/commands/`. The Python nodes reimplement that — keep them faithful to those specs and to the
+verified Jira ground truth (status/label/ID strings).
+
+## Test style (engine code)
+- `pytest`, one behaviour per test; keep the structural-isolation tests green.
+- No network in unit tests — stub the gateway / model; live checks are explicit smoke scripts.

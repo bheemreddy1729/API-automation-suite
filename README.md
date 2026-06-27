@@ -1,95 +1,41 @@
-# API Automation Suite
+# QA Engine
 
-REST API test automation in **Java 11 + REST Assured + JUnit 5** (Maven), with
-**Jira/Xray** traceability and **Allure** reporting. Built to open directly in an
-**Eclipse** workspace.
+The central **brain** of the Enterprise QA Agent platform — **Python + LangGraph**,
+model- & framework-agnostic, multi-tenant, with **federated execution**.
 
-## What this suite does
+This repo is the engine *only*. It does not contain a product test suite: it reads a team's
+Jira tickets, checks requirement readiness, generates tests in the team's chosen stack, and
+**dispatches them to run in that team's own GitHub repo/CI** — then publishes results back to
+Jira/Xray. The engine never holds a team's source code, secrets, or runtime (§9.3).
 
-1. Runs REST Assured + JUnit 5 tests against a target API (`mvn test`).
-2. Connects **Jira Cloud** via the Atlassian (Rovo) MCP server to pull
-   requirements / test cases and post run summaries back.
-3. Annotates tests with `@Requirement` / `@XrayTest` and imports results into
-   **Xray Cloud**, giving a requirement → test → result traceability matrix.
-4. Produces **Allure** reports and a coverage / quality / gap evaluation.
+## What it does (the loop)
+`fetch` (Jira "Ready for testing") → `context_check` (requirements sufficient?) → `plan_gate`
+(test plan, human-approved in Jira) → `generate` (tests in the chosen language) →
+`dispatch_execution` (trigger the team's CI) → `publish_results` (Xray Test card, transitions,
+comments). Gates are **headless and Jira-driven**; results are reported as **JUnit XML → Xray**.
 
-## Prerequisites
+## Layout
+- `engine/` — the Python engine (see [engine/README.md](engine/README.md)). Start here.
+- `docs/` — architecture & decisions ([enterprise-qa-agent-platform.md](docs/enterprise-qa-agent-platform.md)),
+  Jira ground truth, history.
+- `.claude/` — the proven loop logic as prompts/commands (the spec the engine ports).
+- `experiments/` — feasibility probes (e.g. Rovo MCP consumption).
+- `scripts/` — Xray auth/import references (used by the federated runner).
 
-- JDK 11 (`java -version`)
-- Maven 3.9+ (`mvn -version`)
-- Node.js 18+ (for the MCP servers) — Node 24 detected
-- Eclipse IDE for Java Developers (bundles m2e)
-
-## Project layout
-
+## Getting started
+```sh
+cd engine
+python -m venv .venv && . .venv/Scripts/activate    # Windows; use bin/activate on POSIX
+pip install -e ".[dev]"
+pytest                                               # structural-isolation tests
 ```
-pom.xml                                  REST Assured, JUnit5, xray-junit-extensions, Allure
-src/test/java/com/laerdal/api/
-  config/EnvConfig.java                  env/property resolution (base URI, auth, timeout)
-  config/SpecFactory.java                shared RequestSpecification + Allure filter
-  clients/                               per-resource API client wrappers (added in Phase C)
-  tests/                                 REST Assured + JUnit5 test classes
-src/test/resources/
-  config/env.properties                  non-secret defaults
-  junit-platform.properties              JUnit5 + Xray reporter config
-  testdata/                              request payload fixtures
-scripts/                                 Xray auth + results import (Phase D)
-```
+Fill `engine/.env` from `engine/.env.example` (git-ignored) for live Azure/Jira/GitHub access.
 
-## Configuration
+## Identity & config
+A team is onboarded as a `TenantConfig` record (Jira project + target repo + language + credential
+refs) — config, not code. MVP identity is **user-role assumption** (the QA lead's Jira API token +
+a user GitHub PAT); a governed service account comes later.
 
-All config resolves in this order (first hit wins):
-**JVM `-Dkey=value`  →  OS env var (`UPPER_SNAKE_CASE`)  →  `config/env.properties`  →  built-in default.**
-
-Copy `.env.example` to `.env` and fill it in (the file is git-ignored). Secrets
-(tokens, keys) must come from env vars — never `env.properties`.
-
-Defaults target the public `https://jsonplaceholder.typicode.com` demo API so the
-suite is green before your real endpoints are wired in.
-
-## Running
-
-```bash
-mvn test                 # run all tests
-mvn test -Dtest=SmokeTest# run one class
-mvn allure:serve         # open the Allure report (after a test run)
-```
-
-Override the target at runtime:
-
-```bash
-mvn test -Dapi.base.uri=https://api.example.com -Dapi.base.path=/v1 \
-         -Dapi.auth.type=bearer -Dapi.auth.token=$env:API_AUTH_TOKEN
-```
-
-## Open in Eclipse
-
-This folder is a ready Eclipse project (`.project` / `.classpath` / `.settings`
-are committed):
-
-- **Open directly:** File → Open Projects from File System → select this folder.
-- **Or import as Maven:** File → Import → Maven → Existing Maven Projects → select
-  this folder. (Eclipse's m2e regenerates classpath from `pom.xml`.)
-
-Run tests in Eclipse: right-click `SmokeTest` → Run As → JUnit Test.
-
-If the classpath ever drifts from `pom.xml`, regenerate it:
-
-```bash
-mvn -DskipTests eclipse:eclipse
-```
-
-## Jira / Xray / Evaluation
-
-See the implementation plan and the per-phase sections:
-
-- **Phase B** — MCP wiring (Atlassian Rovo MCP + an HTTP explorer MCP).
-- **Phase C** — pull Jira requirements, explore the live API, generate traced tests.
-- **Phase D** — import results to Xray Cloud (`scripts/`), post summary to Jira.
-- **Phase E** — Allure report + coverage / gap evaluation.
-
-Reference docs:
-- Atlassian Rovo MCP — https://support.atlassian.com/atlassian-rovo-mcp-server/
-- Xray import (REST v2) — https://docs.getxray.app/display/XRAYCLOUD/Import+Execution+Results+-+REST+v2
-- Xray JUnit 5 extensions — https://github.com/Xray-App/xray-junit-extensions
-- Allure + REST Assured — https://allurereport.org/docs/restassured/
+## History
+The former Java/REST-Assured TTS test suite was removed when this repo became the engine — see
+[docs/java-suite-history.md](docs/java-suite-history.md).
