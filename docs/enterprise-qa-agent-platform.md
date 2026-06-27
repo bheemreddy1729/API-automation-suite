@@ -11,7 +11,7 @@ Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/d
 🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
 the SCM/admin/security conversation does).
 
-> **Status: architecture CONVERGED** (rounds 1–5; Claude + Perplexity + Gemini independently
+> **Status: architecture CONVERGED** (rounds 1–6; Claude + Perplexity + Gemini independently
 > aligned on the core, adding only refinements/roadmap on top). Remaining 🔄 items resolve when
 > the pilot team is picked; 🚩 items need the org. **Next step = execution, not more AI rounds.**
 
@@ -38,6 +38,12 @@ the SCM/admin/security conversation does).
   pipelines (human gate stays); **prompts/agents are versioned, auditable artifacts**.
 - **Pluggable integration seam** *(round 4)*: design for multiple inbound triggers + outbound
   reporters; **implement one each for MVP** (Jira in, Xray out).
+- **MVP I/O pinned** *(round 6, Perplexity)*: inbound trigger = **Jira Automation webhook** on
+  "Ready for testing"; outbound reporter = **Xray**. The hybrid MCP/REST split is about
+  **identity**, not juggling transports/triggers in Phase 1.
+- **Structural isolation enforcement** *(round 6)*: a missing `tenantId` fails at **CI/compile**,
+  not runtime; **contract tests** cover both MCP + REST backends; §12 is treated as a **hard
+  contract**, not a suggestion.
 
 ### 🔄 Open / debated
 - Lead-facing **web UI / GraphQL API** — needed when? (Perplexity earlier; Claude: defer.)
@@ -63,7 +69,9 @@ the SCM/admin/security conversation does).
   (If yes → per-team fallback per §9.)
 - **Align to Laerdal's internal AI principles** *(round 4 — Gemini cites "Samaritan AI")*: confirm
   the actual principles exist + get their text, then map platform controls (HITL, audit, data
-  handling) to them. Don't assume the specifics.
+  handling) to them. Don't assume the specifics. **Deliverable:** a 1-page mapping from each
+  control (HITL, audit, data-handling, kill switch, tenant isolation) → each principle, used as
+  the reference in security/compliance reviews.
 
 ## 1. Vision
 
@@ -159,6 +167,9 @@ architecture below does **not** change for it.
 - **REST (`JiraClient`)** for the autonomous, unattended loop where browser consent is
   impossible and a service identity is correct.
 - One internal interface over both so the orchestration code doesn't care which backend ran.
+  Back it with **contract tests** running the same high-level ops (read story, comment, create
+  test, transition) against **both** backends, so the MCP and REST paths can't silently diverge —
+  the orchestrator picks only an *identity mode*, never "MCP vs REST". *(round 6, Perplexity)*
 
 ## 6. The reasoning layer is still an LLM
 
@@ -192,6 +203,9 @@ not of the model. Generation is currently Java/JUnit/REST-Assured; going multi-t
 5. **Test-stack scope** — Java-only first, or polyglot from the start?
 6. **Build vs. adopt** — is there appetite to build the orchestration in-house vs. lean on an
    existing agent platform (e.g., Forge remote agents EAP) for the Jira-native parts?
+   **Criteria:** *build* if you need cross-team orchestration + federated execution *outside*
+   Atlassian and custom QA flows; *adopt* if Forge/Rovo agents natively cover most QA processes.
+   Have this answer ready for "why build instead of configure existing tools?".
 
 ## 9. Delivery model — repo, service, or product? (resolving the confusion)
 
@@ -213,6 +227,10 @@ The real fork is **how it runs per team**:
 small — central brain + governance, FEDERATED execution.** The earlier "start Model B per-team"
 call was wrong: forcing every team to deploy a container + manage secrets kills adoption (you'd
 serve only infra-savvy teams) and creates version drift — the opposite of "propagate cleanly."
+
+> **Terminology (avoid a Model A/B mix-up):** an "agent **instance** per team" (§3) is a
+> **logical tenant** — scoped by config + credentials *inside* the one shared service — **not** a
+> separate container or process. *(clarified round 6, Perplexity)*
 
 Three principles make the central model safe:
 1. **Per-team service accounts** + **per-tenant credential & execution isolation** (each
@@ -247,9 +265,11 @@ by convention. These are the rules to bake into the service from day one and to 
 Security so the central model isn't hand-waving — they convert "we'll isolate tenants" into a
 checklist Security can audit:
 
-1. **Explicit tenant on every boundary.** Every external call (Jira/MCP/CI) and every secret
-   lookup carries an explicit `tenantId`. **No ambient/global tenant context** that could leak
-   across teams. A call without a tenant is a hard error, not a default.
+1. **Explicit tenant on every boundary — enforced structurally.** Every external call
+   (Jira/MCP/CI) and every secret lookup takes a **required** `tenantId`; a missing one fails at
+   **compile/CI**, not just runtime, and a CI check flags any call path lacking it. **No
+   ambient / "default tenant" helper, ever** — that omission is the failure mode that leaks
+   behavior across teams. *(structural enforcement: round 6, Perplexity)*
 2. **Per-tenant credentials.** One service account + one secret per tenant, each with its own
    access policy in the secret manager. **No shared token** across tenants.
 3. **Per-tenant execution boundary.** When acting for tenant T, the agent may touch **only** T's
@@ -259,10 +279,17 @@ checklist Security can audit:
    flows independently of the others; plus a master off-switch. (Refines the §3 kill switch.)
 5. **Per-tenant audit.** Every action tagged with `tenantId` (+ acting identity once act-as-user
    lands); lean on the Rovo MCP audit log as the second control plane.
-6. **Per-tenant data-handling.** Ticket content sent to the LLM is tagged per tenant and honors
-   that tenant's data-handling config (region/redaction) — ties to the compliance 🚩 item.
+6. **Per-tenant data-handling.** Ticket content sent to the LLM honors that tenant's config:
+   (a) **which projects/issue types** may be sent at all; (b) **redaction rules** (mask patterns
+   like patient IDs / PHI before they leave); (c) **region/endpoint** (Anthropic direct vs
+   Bedrock-in-region). This is the concrete hook for Laerdal's AI principles + healthcare
+   compliance — ties to the 🚩 item. *(specifics: round 6, Perplexity)*
 7. **Isolation test.** A standing test proves tenant A's config/token cannot reach tenant B's
    projects — isolation is verified in CI, not asserted in a doc.
+8. **Observability (MVP-minimal).** Structured logs carrying `tenantId` + action + result, with
+   distinct levels for security events (cross-tenant denial, kill-switch use), plus a one-page
+   **runbook** ("disable tenant X fast"; "what to check when a team reports a wrong Jira update").
+   Rich per-tenant metrics/dashboards are **Phase 2** — don't gold-plate for one tenant. *(round 6)*
 
 > For the **one-tenant pilot** these mostly reduce to "thread `tenantId` through from the start
 > and don't hardcode the team." Cheap now; expensive to retrofit. Building them in is what lets
@@ -322,7 +349,9 @@ reversible until we commit Phase 1.
 > policy-engine guardrails were sharpened by a parallel review (Perplexity). The
 > federate-execution principle, the MCP↔REST hybrid, and the MVP scope-discipline are this
 > doc's additions on top. Round 4 (Gemini) added the pluggable integration seam, per-tenant RAG
-> (roadmap), prompt/agent versioning, and AI-principles alignment.
+> (roadmap), prompt/agent versioning, and AI-principles alignment. Round 6 (Perplexity, final)
+> hardened execution: structural isolation enforcement, pinned MVP I/O, data-handling specifics,
+> dual-backend contract tests, observability/runbook, and the §12 hard contract.
 
 ## 12. Out of scope for MVP (anti-accretion guardrail)
 
@@ -339,3 +368,7 @@ each with the trigger that would justify it. None of them changes the Phase-1 pi
 | act-as-user OAuth | Service account covers autonomous runs | A flow needs per-user attribution ("done as Alice") |
 
 > Rule of thumb: **design the seams now (so these slot in), build only the pilot's path.**
+>
+> Treat this table as a **hard contract** *(round 6, Perplexity)*: every new ask — Slack trigger,
+> dashboard, multi-CI — is logged against it and built **only** when its trigger condition is
+> actually met, not because it was requested mid-pilot.
