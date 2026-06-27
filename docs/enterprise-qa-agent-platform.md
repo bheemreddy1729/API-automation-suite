@@ -20,9 +20,9 @@ the SCM/admin/security conversation does).
   runs infra) with **per-tenant credential + execution isolation** inside it. **Per-team
   deployment (Model B) is the documented fallback**, justified only if security vetoes central
   credential custody, or pilot teams are infra-capable and want physical isolation for v1.
-  *(round 2 → central; round 3 → nuanced. The **final multi-team call is deferred**: Phase 1 is
-  **identical** under both models, so this fork does **not** gate building. Decide it at team #2,
-  informed by the security stance + pilot data.)*
+  *(round 2 → central; round 3 → **converged (both agents)**: central-but-small default +
+  per-tenant isolation contract (§9.1); Model B = security-gated fallback; final scaling call at
+  **team #2**, on the security stance + pilot data. Does **not** gate Phase 1.)*
 - **Centralize the brain, FEDERATE execution** to each team's existing CI; the platform is
   custodian of **Jira access only**, never teams' codebases/secrets/runtimes. *(round 2)*
 - **Identity:** per-team **service accounts** (MVP), least-privilege, in a secret manager,
@@ -223,6 +223,34 @@ Three principles make the central model safe:
 > as the **default direction**, document Model B as the fallback, and make the **final call at
 > the multi-team phase** — informed by the security stance (🚩) and real pilot adoption. Building
 > the pilot de-risks this more than further debate.
+
+### 9.1 Tenant isolation contract (the artifact for the security conversation)
+
+Choosing central-but-small earns its keep **only if** isolation is enforced structurally, not
+by convention. These are the rules to bake into the service from day one and to put in front of
+Security so the central model isn't hand-waving — they convert "we'll isolate tenants" into a
+checklist Security can audit:
+
+1. **Explicit tenant on every boundary.** Every external call (Jira/MCP/CI) and every secret
+   lookup carries an explicit `tenantId`. **No ambient/global tenant context** that could leak
+   across teams. A call without a tenant is a hard error, not a default.
+2. **Per-tenant credentials.** One service account + one secret per tenant, each with its own
+   access policy in the secret manager. **No shared token** across tenants.
+3. **Per-tenant execution boundary.** When acting for tenant T, the agent may touch **only** T's
+   Jira projects and trigger **only** T's CI, using **only** T's token. Cross-tenant reach is a
+   hard failure, logged.
+4. **Per-tenant kill switch + global kill switch.** Revoke one tenant's secret and disable its
+   flows independently of the others; plus a master off-switch. (Refines the §3 kill switch.)
+5. **Per-tenant audit.** Every action tagged with `tenantId` (+ acting identity once act-as-user
+   lands); lean on the Rovo MCP audit log as the second control plane.
+6. **Per-tenant data-handling.** Ticket content sent to the LLM is tagged per tenant and honors
+   that tenant's data-handling config (region/redaction) — ties to the compliance 🚩 item.
+7. **Isolation test.** A standing test proves tenant A's config/token cannot reach tenant B's
+   projects — isolation is verified in CI, not asserted in a doc.
+
+> For the **one-tenant pilot** these mostly reduce to "thread `tenantId` through from the start
+> and don't hardcode the team." Cheap now; expensive to retrofit. Building them in is what lets
+> Security say yes to central at team #2.
 
 > Concretely: **one repo**, deployed as **one central service** (container + scheduler/webhook),
 > serving one pilot team first. That is simultaneously "a repo," "a service," and the seed of "a
