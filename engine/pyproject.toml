@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "Enterprise QA Agent — central brain (Phase 1 scaffold). Model- & framework-agnostic; federated execution."
 requires-python = ">=3.11"
 dependencies = [
-    "langgraph>=0.2",   # stateful loop orchestration
-    "httpx>=0.27",      # Jira REST (headless service-account path)
+    "langgraph>=1.2",          # stateful loop orchestration
+    "langchain-openai>=1.3",   # AzureChatOpenAI — the model backend (LangGraph has no wrapper of its own)
+    "langchain-core>=1.4",     # chat-model abstraction LangGraph composes with
+    "httpx>=0.28",             # Jira REST (headless service-account path)
+    "python-dotenv>=1.0",      # load engine/.env (git-ignored) for Azure config
 ]
 
 [project.optional-dependencies]

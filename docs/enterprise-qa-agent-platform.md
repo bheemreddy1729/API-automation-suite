@@ -119,6 +119,7 @@ multi-tenancy, hosting, and governance.
 | Custom (non-Claude) agent can consume **Rovo MCP** | `experiments/rovo-mcp` probe: 31 tools, all 8 loop ops, write scope granted |
 | Rovo MCP is GA with org governance | admin controls + permissions + audit logging + IP allowlist |
 | Phase-1 engine scaffold + **structural** tenant isolation | `engine/` (Python + LangGraph); `test_tenant_isolation.py` passes |
+| Engine venv + toml install; Azure OpenAI base connection | `engine/.venv` (py3.14); langgraph 1.2 / langchain-openai 1.3 install OK; `AzureChatOpenAI` per-task; graph compiles |
 
 ## 3. The decision that shapes everything: identity model
 
