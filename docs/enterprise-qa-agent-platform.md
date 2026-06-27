@@ -11,7 +11,7 @@ Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/d
 🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
 the SCM/admin/security conversation does).
 
-> **Status: architecture CONVERGED** (rounds 1–9; Claude + Perplexity + Gemini independently
+> **Status: architecture CONVERGED** (rounds 1–10; Claude + Perplexity + Gemini independently
 > aligned on the core, adding only refinements/roadmap on top). Remaining 🔄 items resolve when
 > the pilot team is picked; 🚩 items need the org. **Next step = execution, not more AI rounds.**
 
@@ -59,9 +59,14 @@ the SCM/admin/security conversation does).
   earlier "Claude Agent SDK" assumption — no model/vendor is locked.** (§6)
 - **Framework-agnostic generation** *(round 9)*: engine generates the **target team's** stack
   (**engine lang ≠ test lang**); pluggable per-stack generators; MVP = Java/JUnit only. (§6, §12)
-- **Engine stack — DECIDE BEFORE SCAFFOLDING** *(round 9)* 🚩→ user: candidate **Python +
-  LangGraph**, model via router (**Azure OpenAI** in-region a strong compliance fit); undecided.
-  Sets the scaffold language; if Python, Java `JiraClient` is a proven *reference*, not engine code.
+- **Engine stack = Python + LangGraph** *(round 10, DECIDED)*: model-agnostic via a task-aware
+  router (**Azure OpenAI** in-region the lead model candidate; specific model still open). Java
+  `JiraClient` is now a proven **reference** + a small Python REST port for the headless path; Rovo
+  MCP for interactive. Scaffolding on `feature/qa-platform-phase1`.
+- **Test-script language = a plan-start gate input** *(round 10, user)*, **default Python**;
+  resolved *explicit choice → per-tenant config → global default (Python)*. Per-stack generators
+  pluggable (§6); MVP ships the **Python/pytest** generator. *(Repo location for the engine — its
+  own repo vs subdir — is an org-fact for the SCM talk; pilot scaffolds in `engine/` here.)*
 - **Proactive PR bug detection** *(round 9)*: roadmap 2nd surface; build-vs-adopt favors Copilot/
   CodeQL unless domain value; triggers the supervisor model. (§7, §12)
 
@@ -113,6 +118,7 @@ multi-tenancy, hosting, and governance.
 | Direct Jira REST v3 + API token, headless | `com.laerdal.api.jira.JiraClient` compiles; `JiraConnectionIT` |
 | Custom (non-Claude) agent can consume **Rovo MCP** | `experiments/rovo-mcp` probe: 31 tools, all 8 loop ops, write scope granted |
 | Rovo MCP is GA with org governance | admin controls + permissions + audit logging + IP allowlist |
+| Phase-1 engine scaffold + **structural** tenant isolation | `engine/` (Python + LangGraph); `test_tenant_isolation.py` passes |
 
 ## 3. The decision that shapes everything: identity model
 
@@ -211,11 +217,13 @@ gateway/router (**Azure OpenAI** in-region a strong compliance fit, or others) �
 abstraction-first** so the choice isn't locked. MVP = one coding + one reasoning model behind a
 simple, config-driven policy; richer routing is roadmap (§12).
 
-**Framework-agnostic generation.** The engine **generates tests in the target team's stack**
-(Java/JUnit, Python/pytest, JS/Playwright, …) and the team's CI runs them (§9.3) — so
-**engine language ≠ generated-test language**. A Python engine generates Java tests for the
-LBVOICESER pilot, pytest for a Python team, etc. Per-stack generators are a pluggable seam; MVP
-implements the **pilot's stack only (Java/JUnit/REST-Assured)**.
+**Framework-agnostic generation.** The engine **generates tests in a chosen target stack**
+(Python/pytest, Java/JUnit, JS/Playwright, …) and the team's CI runs them (§9.3) — so
+**engine language ≠ generated-test language**. The **target test-script language is a plan-start
+gate input**, resolved *explicit choice → per-tenant config → global default* (**default Python**,
+round 10). Per-stack generators are a pluggable seam; MVP ships the **Python/pytest** generator,
+with the pilot's actual stack chosen at the gate (LBVOICESER's existing suite is Java/REST-Assured,
+so its tenant config may set Java — or pilot Python/pytest against the API).
 
 > Implication for the connection work: a Python engine reaches Jira via a **Python REST client**
 > (headless/service-account path — a small port of the proven `JiraClient` logic) and **Rovo MCP**
