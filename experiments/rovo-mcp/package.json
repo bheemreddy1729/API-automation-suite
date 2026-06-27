@@ -1,0 +1,13 @@
+{
+  "name": "rovo-mcp-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Probe: can a custom (non-Claude) MCP client consume the Atlassian Rovo MCP server?",
+  "scripts": {
+    "probe": "node probe.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

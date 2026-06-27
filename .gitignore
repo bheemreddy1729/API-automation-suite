@@ -17,6 +17,10 @@ allure-report/
 # QA loop transient artifacts (test plans opened for review by /qa-start)
 qa/
 
+# Experiments — Node deps & lockfiles (the probe is run ad hoc)
+experiments/**/node_modules/
+experiments/**/package-lock.json
+
 # Eclipse (keep .project/.classpath/.settings so the project opens directly;
 # ignore only transient Eclipse output)
 bin/
