@@ -11,7 +11,7 @@ Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/d
 🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
 the SCM/admin/security conversation does).
 
-> **Status: architecture CONVERGED** (rounds 1–7; Claude + Perplexity + Gemini independently
+> **Status: architecture CONVERGED** (rounds 1–8; Claude + Perplexity + Gemini independently
 > aligned on the core, adding only refinements/roadmap on top). Remaining 🔄 items resolve when
 > the pilot team is picked; 🚩 items need the org. **Next step = execution, not more AI rounds.**
 
@@ -49,6 +49,11 @@ the SCM/admin/security conversation does).
   onboard by config, no per-tenant deploy). Overrides confined to tunable areas; **core
   safety/governance prompts immutable + applied last**; overrides versioned + lead-approved.
   Seam designed in Phase 1, override tooling Phase 2+. (§9.2)
+- **Runtime topology** *(round 8)*: **brain** (orchestrate/reason/Jira I/O) is separate from
+  **execution** (the team's CI — GitHub Actions — runs the generated tests in the team's env).
+  The brain can run **GHA-native for the pilot** (no server → sidesteps the hosting 🚩) and
+  graduate to a **central service** at enterprise scale — same code, different host. Doesn't gate
+  Phase 1. (§9.3)
 
 ### 🔄 Open / debated
 - Lead-facing **web UI / GraphQL API** — needed when? (Perplexity earlier; Claude: defer.)
@@ -67,7 +72,8 @@ the SCM/admin/security conversation does).
 - Can the org **provision per-team service accounts** (+ licensing), or must it be an OAuth
   3LO app?
 - Can the org **enable + govern Rovo MCP** (permissions, IP/domain allowlist, audit log)?
-- **Hosting** target (Azure / k8s / internal app platform)?
+- **Hosting** target (Azure / k8s / internal app platform)? *(pilot can run GHA-native, deferring
+  this — see §9.3.)*
 - **Compliance:** is sending ticket content to the Anthropic API approved? DPA / region pin /
   Bedrock-in-region? What security review gates org-wide rollout?
 - Would security **veto a central service** holding write-credentials to many projects?
@@ -333,6 +339,35 @@ tenants subclass/override" is the right *mental model* but the wrong *implementa
 **Timing:** design the **seam** in Phase 1 (prompts loaded as the one tenant's config/overlay, even
 with a single tenant) so it isn't retrofitted; build the multi-tenant override **tooling**
 (authoring, review, per-tenant prompt store) in Phase 2+.
+
+### 9.3 Runtime topology — what runs where (the execution boundary)
+
+Federated execution (§9, principle 2) splits the work across **two runtimes**:
+
+| **Central BRAIN** (server *or* a GHA job — see below) | **Team's CI** (GitHub Actions / their CI) |
+|---|---|
+| Receive trigger (Jira webhook / schedule) | Check out the team's repo |
+| Read ticket (Jira/MCP); LLM context-check + test generation | **Run** the generated tests in the team's env (`mvn test …`) with the **team's** secrets |
+| Human gates (in Jira); commit/PR the test; **dispatch** the team's workflow | Produce results/Allure artifacts; report back |
+| Parse results → update Jira/Xray, transition cards, comment | — |
+
+The brain holds **Jira access only**; the team's CI holds the **code, environment, secrets, and
+runtime**. Test execution is decoupled to GitHub Actions exactly as intuited — that *is*
+federated execution, and it's why the platform never needs custody of a team's system-under-test.
+
+**Where does the brain itself run? Two options — and the pilot doesn't force the choice:**
+- **GHA-native (cheapest pilot):** run the orchestration loop *as* a GitHub Actions workflow
+  (Jira webhook → `repository_dispatch`/`workflow_dispatch`). **No server to provision → sidesteps
+  the hosting 🚩 for Phase 1.** Ideal for one tenant; weaker as a multi-tenant control plane
+  (ephemeral jobs, harder cross-tenant audit/kill-switch).
+- **Central service (enterprise target):** a persistent multi-tenant service — the right home for
+  cross-tenant governance, audit, kill switch, and always-on webhooks; the §9.1 isolation contract
+  is easiest to enforce here.
+
+**Recommendation:** the pilot can run the brain in **GHA** (no infra wait); graduate it to a
+**central service** when multi-tenant governance demands it — **same orchestration code, different
+invocation host**. Like the central-vs-per-team fork, this **does not gate the Phase-1 scaffold**
+(the loop logic is identical; only its trigger/host differs).
 
 ## 10. What to ask in the SCM / platform discussion
 
