@@ -75,12 +75,15 @@ def deployment_for(task: TaskKind) -> str:
     return deployment
 
 
-def build_chat_model(task: TaskKind, *, temperature: float = 0.0):
+def build_chat_model(task: TaskKind, *, temperature: float | None = None):
     """Build an ``AzureChatOpenAI`` for ``task``'s deployment.
 
     Lazy-imports ``langchain_openai`` and raises a clear error if the package isn't installed
     or the Azure config/creds are missing. Returns a LangChain chat model usable directly by
     LangGraph nodes.
+
+    ``temperature`` defaults to ``None`` (use the model's default). gpt-5/reasoning deployments
+    reject a non-default ``temperature`` — pass a value only for models that support it.
     """
     try:
         from langchain_openai import AzureChatOpenAI
@@ -90,13 +93,15 @@ def build_chat_model(task: TaskKind, *, temperature: float = 0.0):
         ) from exc
 
     settings = AzureSettings.from_env()
-    return AzureChatOpenAI(
+    kwargs = dict(
         azure_endpoint=settings.endpoint,
         api_key=settings.api_key,
         api_version=settings.api_version,
         azure_deployment=deployment_for(task),
-        temperature=temperature,
     )
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return AzureChatOpenAI(**kwargs)
 
 
 def verify_config() -> dict[str, bool]:

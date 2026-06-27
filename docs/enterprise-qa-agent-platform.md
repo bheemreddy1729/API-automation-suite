@@ -83,9 +83,12 @@ the SCM/admin/security conversation does).
   request types. The current phased pipeline is already the needed modularity.
 
 ### 🚩 Gated on org facts (SCM / Atlassian admin / security)
-- Does **SSO block API-token Basic auth**? *(the `JiraConnectionIT` smoke test answers this.)*
+- ~~Does **SSO block API-token Basic auth**?~~ **✅ ANSWERED 2026-06-27: No — API-token Basic
+  auth works.** Verified live via `JiraConnectionIT` (connected as the account, 2/2 tests
+  passed, Phase-1 JQL returned real LBVOICESER tickets). Headless auth = **direct REST + token**;
+  no OAuth 3LO fallback required for the autonomous loop.
 - Can the org **provision per-team service accounts** (+ licensing), or must it be an OAuth
-  3LO app?
+  3LO app? **← now the top open identity question (see §10.B).**
 - Can the org **enable + govern Rovo MCP** (permissions, IP/domain allowlist, audit log)?
 - **Hosting** target (Azure / k8s / internal app platform)? *(pilot can run GHA-native, deferring
   this — see §9.3.)*
@@ -428,18 +431,33 @@ invocation host**. Like the central-vs-per-team fork, this **does not gate the P
 - Can CI hold **per-team secrets** securely (scoped, not shared)? Which runners?
 - If teams consume a shared container/template, what's the **versioning/release** model?
 
-**B. Atlassian administration** *(org admin)*
-- Can we provision **per-team service accounts** for the QA bot? Licensing impact?
-- If not, can we register an **OAuth 2.0 (3LO) app** (org-approved) for act-as-user?
-- Is **API-token Basic auth** permitted, or disabled by SSO policy? *(the `JiraConnectionIT`
-  smoke test answers this empirically — run it early.)*
+**B. Atlassian administration & identity — the decision that shapes everything** *(org admin)*
+- Does a dedicated **service/bot account consume a billable license seat**? Per-seat cost, and
+  the cost at **per-team × N teams** scale?
+- Is there a **seat-free identity** — a **Forge/Connect app user**, or an unlicensed bot tier —
+  that still has its **own** identity (clean attribution, no seat consumed)?
+- Is it **policy-permitted to run automation under a real employee's identity** (e.g. the QA
+  lead's token or OAuth consent — *reuses their existing seat, so no new license*), or is that
+  prohibited under a personal-/shared-credential policy? *(This is the "act as the QA lead"
+  option: cheapest, but actions are attributed to the human and inherit their full access.)*
+- If act-as-user is allowed, can we register an **org-approved OAuth 2.0 (3LO) app** (redirect
+  URIs, scopes, admin consent)? *(NB: registering our **own** server-side OAuth app against the
+  hosted Rovo MCP is currently **blocked** — the `experiments/rovo-mcp` probe only worked by
+  riding `mcp-remote`'s OAuth client. A 3LO app **directly** against Jira REST is a separate ask.)*
+- What **Jira permission granularity** can the bot/identity get — ideally **project-scoped,
+  least-privilege** (read + comment + label + transition + create Test issues for *one* project)?
+- ~~Is API-token Basic auth permitted, or disabled by SSO policy?~~ **✅ Answered 2026-06-27:
+  permitted** — verified live via `JiraConnectionIT`.
 - Can the org **enable + govern the Rovo MCP server** — permissions tab, domain/IP allowlist,
-  audit log? Who administers it?
-- What **Jira permission granularity** can the bot identity get (ideally project-scoped)?
+  audit log? Who administers it? *(Only needed for the interactive/act-as-user path; the headless
+  loop uses REST.)*
 
 **C. Identity & secrets**
 - Where do credentials live — **Key Vault / secrets manager**? Per-team scoping + **rotation**?
 - Who owns the credential lifecycle?
+- **Token expiry policy** — do API tokens expire / is rotation forced? *(Critical if we act under
+  a human's identity: their token leaving/expiring silently breaks the automation.)*
+- **Revocation / kill-switch** path if the agent misbehaves — who can pull a tenant's access instantly?
 
 **D. Hosting / runtime**
 - Approved hosting for an **always-on service or scheduled job** (Azure / container platform / k8s)?
