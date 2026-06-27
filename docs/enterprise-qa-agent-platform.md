@@ -30,6 +30,10 @@ the SCM/admin/security conversation does).
 - **MVP scope discipline:** approvals in **Jira (no UI yet)**, one pilot team, read-only →
   write-under-QA-lead-approval. Defer web UI / GraphQL API / policy engine.
 - **Framing:** design-as-product, implement-as-service, manage-in-repo (lenses, not choices).
+- **HITL + versioning** *(round 4, Gemini)*: AI-generated tests **never auto-merge** to critical
+  pipelines (human gate stays); **prompts/agents are versioned, auditable artifacts**.
+- **Pluggable integration seam** *(round 4)*: design for multiple inbound triggers + outbound
+  reporters; **implement one each for MVP** (Jira in, Xray out).
 
 ### 🔄 Open / debated
 - Lead-facing **web UI / GraphQL API** — needed when? (Perplexity earlier; Claude: defer.)
@@ -37,6 +41,11 @@ the SCM/admin/security conversation does).
 - **Triggers** — scheduler vs Jira Automation webhook vs Slack command vs CI hook for MVP.
 - **Test-stack scope** — Java/REST first vs polyglot/UI from the start (UI is roadmap).
 - **Reasoning model hosting** — Anthropic API direct vs Bedrock-in-region (ties to compliance).
+- **Per-tenant RAG/context engine** *(round 4, Gemini)* — Phase-2 **quality** lever; deferred from
+  MVP. ⚠ reintroduces data custody → must obey §9.1 + the compliance 🚩.
+- **Agnostic integration adapters** (multi-CI in, Zephyr/Allure out) — roadmap; MVP = Jira + Xray.
+- **Supervisor/multi-agent runtime** — Phase 3+ only, *if* the platform serves heterogeneous
+  request types. The current phased pipeline is already the needed modularity.
 
 ### 🚩 Gated on org facts (SCM / Atlassian admin / security)
 - Does **SSO block API-token Basic auth**? *(the `JiraConnectionIT` smoke test answers this.)*
@@ -48,6 +57,9 @@ the SCM/admin/security conversation does).
   Bedrock-in-region? What security review gates org-wide rollout?
 - Would security **veto a central service** holding write-credentials to many projects?
   (If yes → per-team fallback per §9.)
+- **Align to Laerdal's internal AI principles** *(round 4 — Gemini cites "Samaritan AI")*: confirm
+  the actual principles exist + get their text, then map platform controls (HITL, audit, data
+  handling) to them. Don't assume the specifics.
 
 ## 1. Vision
 
@@ -305,4 +317,21 @@ reversible until we commit Phase 1.
 > Credit: the central-service framing, kill-switch, integration recipes (webhook/Slack/CI), and
 > policy-engine guardrails were sharpened by a parallel review (Perplexity). The
 > federate-execution principle, the MCP↔REST hybrid, and the MVP scope-discipline are this
-> doc's additions on top.
+> doc's additions on top. Round 4 (Gemini) added the pluggable integration seam, per-tenant RAG
+> (roadmap), prompt/agent versioning, and AI-principles alignment.
+
+## 12. Out of scope for MVP (anti-accretion guardrail)
+
+Multi-agent reviews tend to *add* scope. To stay buildable, these are explicitly **deferred**,
+each with the trigger that would justify it. None of them changes the Phase-1 pilot.
+
+| Deferred capability | Why not MVP | Trigger to build it |
+|---|---|---|
+| Supervisor / multi-agent router | The phased pipeline is already modular | Platform serves heterogeneous request types beyond the QA loop |
+| RAG / vector-DB context engine | One team's context fits in the prompt; adds data custody + ops | Generation quality needs cross-doc/historical context at scale |
+| Multi-CI + multi-reporter adapters | Pilot uses Jira + Xray; seam is enough | A team on a different CI / test-mgmt tool onboards |
+| Lead-facing web UI / GraphQL API | Approvals work in Jira | Leads need cross-project dashboards / non-Jira approval UX |
+| Full policy engine | Config guardrails + human gates suffice | Rules outgrow config; need dynamic, auditable policy |
+| act-as-user OAuth | Service account covers autonomous runs | A flow needs per-user attribution ("done as Alice") |
+
+> Rule of thumb: **design the seams now (so these slot in), build only the pilot's path.**
