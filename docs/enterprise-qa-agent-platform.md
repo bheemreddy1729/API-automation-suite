@@ -11,7 +11,7 @@ Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/d
 🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
 the SCM/admin/security conversation does).
 
-> **Status: architecture CONVERGED** (rounds 1–8; Claude + Perplexity + Gemini independently
+> **Status: architecture CONVERGED** (rounds 1–9; Claude + Perplexity + Gemini independently
 > aligned on the core, adding only refinements/roadmap on top). Remaining 🔄 items resolve when
 > the pilot team is picked; 🚩 items need the org. **Next step = execution, not more AI rounds.**
 
@@ -54,6 +54,16 @@ the SCM/admin/security conversation does).
   The brain can run **GHA-native for the pilot** (no server → sidesteps the hosting 🚩) and
   graduate to a **central service** at enterprise scale — same code, different host. Doesn't gate
   Phase 1. (§9.3)
+- **Model- & framework-agnostic engine** *(round 9, user)*: LLM via a **task-aware model router**
+  (coding vs reasoning vs cheap-classify; route by data-sensitivity → in-region). **Corrects the
+  earlier "Claude Agent SDK" assumption — no model/vendor is locked.** (§6)
+- **Framework-agnostic generation** *(round 9)*: engine generates the **target team's** stack
+  (**engine lang ≠ test lang**); pluggable per-stack generators; MVP = Java/JUnit only. (§6, §12)
+- **Engine stack — DECIDE BEFORE SCAFFOLDING** *(round 9)* 🚩→ user: candidate **Python +
+  LangGraph**, model via router (**Azure OpenAI** in-region a strong compliance fit); undecided.
+  Sets the scaffold language; if Python, Java `JiraClient` is a proven *reference*, not engine code.
+- **Proactive PR bug detection** *(round 9)*: roadmap 2nd surface; build-vs-adopt favors Copilot/
+  CodeQL unless domain value; triggers the supervisor model. (§7, §12)
 
 ### 🔄 Open / debated
 - Lead-facing **web UI / GraphQL API** — needed when? (Perplexity earlier; Claude: defer.)
@@ -149,7 +159,7 @@ architecture below does **not** change for it.
 ├─────────────────────────────────────────────────────────────────────┤
 │  Orchestration & agent runtime                                        │
 │   • QA lifecycle as a hosted service (the /ready-for-testing phases)  │
-│   • Claude Agent SDK based (MCP-native; matches what works today)     │
+│   • Model/vendor-agnostic engine; LLM via a task-aware router (§6)    │
 │   • Scheduler/queue for autonomous loops; stateless workers           │
 │   • Human gates preserved (plan + script approvals) — non-negotiable  │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -182,12 +192,35 @@ architecture below does **not** change for it.
   test, transition) against **both** backends, so the MCP and REST paths can't silently diverge —
   the orchestrator picks only an *identity mode*, never "MCP vs REST". *(round 6, Perplexity)*
 
-## 6. The reasoning layer is still an LLM
+## 6. The reasoning layer — model- & framework-agnostic
 
-Context-scoring and **test generation** remain Claude (API/Agent SDK) work — a deterministic
-service can't generate tests. "Independent of Claude Code" = independent of the *CLI harness*,
-not of the model. Generation is currently Java/JUnit/REST-Assured; going multi-team may mean
-**polyglot generation** (other teams' stacks) — a major scope lever (see §8).
+Context-scoring and **test generation** are LLM work (a deterministic service can't generate
+tests), but the platform is **not tied to any one model, vendor, or SDK**, and the engine itself
+is a separate service (likely **Python**), independent of this Java repo.
+
+**Model-agnostic via a task-aware router.** The engine calls LLMs through a **model router**, not
+a hardcoded model. It picks per task:
+- **coding models** for test/code generation,
+- **reasoning models** for critical decisions (gate calls, spec-vs-behavior judgments),
+- **cheap/fast models** for classification (e.g. the context-check verdict),
+- and may route by **data-sensitivity** → an **in-region** model for sensitive tenants (ties to
+  §9.1 data-handling + the compliance 🚩).
+
+Candidate stack: **Python + LangGraph** (stateful graph orchestration) with models behind a
+gateway/router (**Azure OpenAI** in-region a strong compliance fit, or others) — **undecided;
+abstraction-first** so the choice isn't locked. MVP = one coding + one reasoning model behind a
+simple, config-driven policy; richer routing is roadmap (§12).
+
+**Framework-agnostic generation.** The engine **generates tests in the target team's stack**
+(Java/JUnit, Python/pytest, JS/Playwright, …) and the team's CI runs them (§9.3) — so
+**engine language ≠ generated-test language**. A Python engine generates Java tests for the
+LBVOICESER pilot, pytest for a Python team, etc. Per-stack generators are a pluggable seam; MVP
+implements the **pilot's stack only (Java/JUnit/REST-Assured)**.
+
+> Implication for the connection work: a Python engine reaches Jira via a **Python REST client**
+> (headless/service-account path — a small port of the proven `JiraClient` logic) and **Rovo MCP**
+> (interactive/act-as-user — already validated from a custom client in `experiments/rovo-mcp`).
+> The Java `JiraClient` stays a proven **reference**, not engine code, if the engine is Python.
 
 ## 7. Phased roadmap (crawl → walk → run)
 
@@ -200,8 +233,14 @@ not of the model. Generation is currently Java/JUnit/REST-Assured; going multi-t
   not code. Prove the abstraction holds.
 - **Phase 3 — Multi-team self-service.** Onboarding portal + admin approval flow; act-as-user
   OAuth; Rovo MCP governance wired in; audit/compliance review.
-- **Phase 4 — Generalize the test stack** (only if demanded): polyglot generation, pluggable
-  runners/reporters.
+- **Phase 4 — Polyglot generation** (now a core goal, not "if demanded"): pluggable per-stack
+  generators + runners/reporters so non-Java teams onboard. Design the seam early (§6); build per
+  stack as teams arrive.
+- **Parallel capability (roadmap) — proactive PR bug detection.** A **second product surface**:
+  review dev PRs for likely bugs + post inline suggestions. Different trigger (PR opened) and
+  output (review comments) → this is the **trigger for the supervisor/multi-agent model** (§12).
+  **Build-vs-adopt:** prefer integrating GitHub **Copilot review / Autofix / CodeQL** unless
+  **domain-specific** (medical-device) detection adds value they miss. Not MVP.
 
 ## 8. Open decisions (need you / the org)
 
@@ -410,10 +449,16 @@ invocation host**. Like the central-vs-per-team fork, this **does not gate the P
 
 ## 11. Immediate next step
 
-Confirm Phase-1 = the LBVOICESER loop as **one central service, one tenant**, service-account
-identity, federated execution (§9). Then I scaffold it on a new branch
-(`feature/qa-platform-phase1`) reusing `JiraClient` + the existing prompts. Everything above is
-reversible until we commit Phase 1.
+**Gate (round 9): pick the engine stack before scaffolding** — it sets the scaffold language.
+Recommended: **Python + LangGraph**, model-agnostic via a router (**Azure OpenAI** in-region as the
+leading model on compliance grounds), Phase-1 generator targeting the pilot's **Java/JUnit** stack,
+headless Jira via a small Python port of `JiraClient` (+ Rovo MCP for interactive). *(Earlier this
+said "scaffold in Java reusing JiraClient" — superseded: if Python, the scaffold is Python and
+`JiraClient` is a reference.)*
+
+Then Phase-1 = the LBVOICESER loop, **one tenant**, brain in **GitHub Actions** (no server yet, §9.3),
+`TenantContext`/`tenantId` boundary first (§9.1). The `JiraConnectionIT` smoke test settles the auth
+🚩 in parallel. Reversible until we commit Phase 1.
 
 > Credit: the central-service framing, kill-switch, integration recipes (webhook/Slack/CI), and
 > policy-engine guardrails were sharpened by a parallel review (Perplexity). The
@@ -437,6 +482,9 @@ each with the trigger that would justify it. None of them changes the Phase-1 pi
 | Full policy engine | Config guardrails + human gates suffice | Rules outgrow config; need dynamic, auditable policy |
 | act-as-user OAuth | Service account covers autonomous runs | A flow needs per-user attribution ("done as Alice") |
 | Per-tenant override tooling (authoring / review / prompt store) | Pilot has one tenant's prompt set; the §9.2 *seam* is enough | A 2nd team needs its own prompt overlays |
+| Polyglot generators (beyond pilot stack) | Pilot team is Java; generate one stack | A non-Java team onboards |
+| Rich model-routing policy | MVP = 1 coding + 1 reasoning model, simple rules | Cost/quality tuning across many models/domains needed |
+| Proactive PR bug-detection surface | 2nd product; off-the-shelf (Copilot/CodeQL) may cover it | Domain-specific detection generic tools miss + real demand |
 
 > Rule of thumb: **design the seams now (so these slot in), build only the pilot's path.**
 >
