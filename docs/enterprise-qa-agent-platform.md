@@ -109,9 +109,11 @@ not of the model. Generation is currently Java/JUnit/REST-Assured; going multi-t
 
 ## 7. Phased roadmap (crawl → walk → run)
 
-- **Phase 1 — Productionize for one team.** Host the LBVOICESER loop as a service:
-  service-identity REST auth, scheduler for Ready-for-testing, human gates intact, results to
-  Xray. *Goal: the loop runs without Claude Code.*
+- **Phase 1 — Productionize for one team (central service, one tenant).** Host the LBVOICESER
+  loop as a service: service-identity REST auth, trigger via scheduler **and/or a Jira
+  Automation webhook** on "Ready for testing", human gates intact, **execution federated to the
+  team's existing CI**, results to Xray, plus a **kill switch** to disable the agent fast.
+  *Goal: the loop runs without Claude Code.*
 - **Phase 2 — Multi-project (same team).** Config-driven: onboard a 2nd/3rd project by config,
   not code. Prove the abstraction holds.
 - **Phase 3 — Multi-team self-service.** Onboarding portal + admin approval flow; act-as-user
@@ -147,18 +149,29 @@ The real fork is **how it runs per team**:
 | Pros | Max governance, central updates & visibility | Isolation by construction; team owns secrets; ship-versions-they-adopt |
 | Cons | **You** become custodian of org-wide Jira creds — large security/compliance surface; 24/7 ops | Drift across teams; harder to push updates centrally |
 
-**Recommendation: start Model B → graduate the proven path to Model A.** Begin with a
-per-team packaged deployment where each team runs the agent under its own scoped identity;
-once adoption and governance demand central visibility, promote the popular path into a
-managed central service. Rationale: it matches the human analogy (a junior embedded in **one**
-team with **one** scoped identity), and it defers the hardest problems — central credential
-custody, multi-tenant auth, always-on ops, and the compliance of a shared credential vault —
-until you've earned the right to take them on. For a medical-device org, *not* being the
-day-one custodian of everyone's Jira tokens is a feature.
+**Recommendation (revised after review): build ONE central service (Model A), but start it
+small — central brain + governance, FEDERATED execution.** The earlier "start Model B per-team"
+call was wrong: forcing every team to deploy a container + manage secrets kills adoption (you'd
+serve only infra-savvy teams) and creates version drift — the opposite of "propagate cleanly."
 
-> Concretely for Phase 1: **one repo**, packaged as a **container + scheduled job** a team runs
-> with **its own service identity**. That is simultaneously "a repo," "a service," and the seed
-> of "a product" — the confusion dissolves once you stop treating them as alternatives.
+Three principles make the central model safe:
+1. **Per-team service accounts**, least-privilege scopes, in a secret manager, with audit + a
+   **kill switch** — this, not per-team deployment, is how you contain the custody concern.
+2. **Execution federates to each team's existing CI.** The agent *triggers* the team's pipeline
+   to run tests; the platform never centralizes anyone's source code, secrets, or runtimes. So
+   the platform is custodian of **Jira access only**, never of teams' codebases — this is the
+   key insight that resolves both the custody and the execution-complexity problems.
+3. **"Start small" = small in tenants & scope, not in topology.** One pilot team, read-only →
+   write-under-QA-lead-approval, approvals in Jira (no UI yet), one service account. Add teams
+   by config; add the vault hardening, act-as-user OAuth, a lead dashboard, and a policy engine
+   only as real usage demands.
+
+> Per-team deployment (old Model B) remains a **fallback** only if security vetoes a central
+> service holding write-credentials to many projects. Default to central-but-small.
+
+> Concretely: **one repo**, deployed as **one central service** (container + scheduler/webhook),
+> serving one pilot team first. That is simultaneously "a repo," "a service," and the seed of "a
+> product" — the confusion dissolves once you stop treating them as alternatives.
 
 ## 10. What to ask in the SCM / platform discussion
 
@@ -201,7 +214,12 @@ day-one custodian of everyone's Jira tokens is a feature.
 
 ## 11. Immediate next step
 
-Pick the Phase-1 target and identity model, then I scaffold the hosted loop on a new branch
-(`feature/qa-platform-phase1`) reusing `JiraClient` + the existing prompts — packaged per §9
-(container + scheduled job, team-scoped identity). Everything above is reversible until we
-commit Phase 1.
+Confirm Phase-1 = the LBVOICESER loop as **one central service, one tenant**, service-account
+identity, federated execution (§9). Then I scaffold it on a new branch
+(`feature/qa-platform-phase1`) reusing `JiraClient` + the existing prompts. Everything above is
+reversible until we commit Phase 1.
+
+> Credit: the central-service framing, kill-switch, integration recipes (webhook/Slack/CI), and
+> policy-engine guardrails were sharpened by a parallel review (Perplexity). The
+> federate-execution principle, the MCP↔REST hybrid, and the MVP scope-discipline are this
+> doc's additions on top.
