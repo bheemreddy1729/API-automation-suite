@@ -44,9 +44,12 @@ edits work via the opened file **or** chat.
 The underlying phases (1,2,exec,update automatic; plan + script human-gated):
 
 ```
-① Fetch        JQL: LBVOICESER Stories in "Ready for testing",
-               excluding labels qa-auto-generated / qa-context-requested
+① Fetch        JQL: LBVOICESER Stories in "Ready for testing", excluding the done
+               label qa-auto-generated (qa-context-requested is KEPT for re-eval)
 ② Context check  per ticket → SUFFICIENT | INSUFFICIENT
+               re-eval gate: a qa-context-requested ticket is re-checked only when
+               updated > its [qa-auto:context-request] comment.created.
+               sufficient → drop label + proceed; still short → stay silent
 ③ Gate 1       AI drafts test-case table from ACs → QA approves/rejects plan
 ④ Gate 2       AI writes Java JUnit5/REST-Assured class → QA approves/rejects
    ⚠ INSUFFICIENT → post structured Jira comment, label qa-context-requested, skip
@@ -109,8 +112,10 @@ Prior run (2026-06-25) already executed this set once: 1335 and 1334 still carry
 prior comments; 1330 is clean. Labels were reset to empty so the loop re-processes them.
 Insufficient comments address the **assignee**; failure comments @-tag the **reporter**.
 
-- `LBVOICESER-1076` (Story) also sits in *Ready for testing* but stays excluded — it is
-  labeled `qa-context-requested` from the 2026-06-18 run (proves the once-only filter).
+- `LBVOICESER-1076` (Story) also sits in *Ready for testing* labeled `qa-context-requested`
+  from the 2026-06-18 run. It is now **fetched** (no longer excluded) but the Phase 2-B
+  timestamp gate skips it silently until its `updated` exceeds its `[qa-auto:context-request]`
+  comment's `created` — i.e. until the author actually edits it.
 
 ---
 

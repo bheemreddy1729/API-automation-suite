@@ -9,7 +9,25 @@ you've verified the generated script(s). Running it means "scripts verified — 
 
 ## Steps
 
-1. **Execute** (one combined run over the approved classes):
+> Test-card lifecycle across this stage: **Open → In Progress (when the run starts) →
+> Done (all-pass) / Open (any failure).** The card is created and **linked to the parent**
+> before execution so it is visibly *In Progress* while the tests run.
+
+1. **Create + link the Xray Test card, then mark it In Progress**
+   (`.claude/prompts/test-card.md` Stages 1-2):
+   - `createJiraIssue` → Xray **Test** (project `LBVOICESER`, `issueTypeName: Test`,
+     summary `[Automated] <parent summary> — API tests`, description = approved plan).
+   - `createIssueLink` type **`Tests`**: `inwardIssue` = new card, `outwardIssue` = parent
+     (so the parent shows the linked Test card during the demo).
+   - Reuse an existing `Tests`-linked `[Automated]` card if the parent already has one.
+   - Swap `@XrayTest(key=...)` in the Java to the Test card key.
+   - **Transition the card → In Progress** (resolve the id by name via
+     `getTransitionsForJiraIssue`, then `transitionJiraIssue`) to signal execution is
+     starting.
+   - Reuse detection is by the parent's current `Tests` links: a card that was previously
+     **detached** is NOT found, so a fresh card is created (don't re-link stale cards).
+
+2. **Execute** (one combined run over the approved classes):
    ```
    mvn test -Dtest=<ClassA,ClassB>
    ```
@@ -17,7 +35,7 @@ you've verified the generated script(s). Running it means "scripts verified — 
    `src/test/resources/config/tenants.properties`). Capture per-method pass/fail and
    expected-vs-actual.
 
-2. **Serve the Allure report (automatic — do not wait to be asked):**
+3. **Serve the Allure report (automatic — do not wait to be asked):**
    ```
    mvn allure:serve
    ```
@@ -28,19 +46,12 @@ you've verified the generated script(s). Running it means "scripts verified — 
    Static alternative if a server can't bind: `mvn allure:report` →
    `target/site/allure-maven-plugin/index.html`.
 
-3. **Create + link the Xray Test card** (`.claude/prompts/test-card.md` Stages 1-2):
-   - `createJiraIssue` → Xray **Test** (project `LBVOICESER`, `issueTypeName: Test`,
-     summary `[Automated] <parent summary> — API tests`, description = approved plan).
-   - `createIssueLink` type **`Tests`**: `inwardIssue` = new card, `outwardIssue` = parent.
-   - Swap `@XrayTest(key=...)` in the Java to the new Test card key.
-   - Reuse an existing `Tests`-linked `[Automated]` card if the parent already has one.
-
 4. **Publish results** (`test-card.md` Stage 3):
    - Post a run-summary comment on the **Test card** (counts, per-method result,
      `mvn allure:serve` for the report).
-   - **Test card status:** all tests pass → transition the card to **Done** (resolve the
-     id via `getTransitionsForJiraIssue`, then `transitionJiraIssue`); any failure → leave
-     it **Open** so the red card stays visible.
+   - **Test card status (out of In Progress):** all tests pass → transition to **Done**;
+     any failure → transition back to **Open** so the red card stays visible
+     (resolve ids by name via `getTransitionsForJiraIssue`, then `transitionJiraIssue`).
    - **Parent ticket:** all-pass → stamp `qa-auto-generated`; any failure → comment
      @-mentioning the parent's reporter with the failing methods (leave unlabeled so it
      reprocesses after a fix). **Never transition the parent** (pass or fail) — label only.

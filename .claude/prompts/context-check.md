@@ -1,7 +1,10 @@
 # Prompt — Context Check
 
-> Invoked by `/ready-for-testing` for **every** fetched ticket. Scores a Jira ticket
-> for test-automation readiness and returns `SUFFICIENT` or `INSUFFICIENT`.
+> Invoked by `/ready-for-testing` for **every** fetched ticket — both fresh tickets and
+> `qa-context-requested` re-evaluation candidates whose `updated` is newer than the
+> request comment (Phase 2-B). Scores a Jira ticket for test-automation readiness and
+> returns `SUFFICIENT` or `INSUFFICIENT`. Stateless: it judges the ticket's current
+> content only; the timestamp gating and label removal are the orchestrator's job.
 
 ## Role
 You are a QA readiness gatekeeper for the LBVOICESER (Laerdal TTS / Voice Service)

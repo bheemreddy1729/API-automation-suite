@@ -30,7 +30,9 @@
       "PowerShell(mvn -q allure:report)",
       "mcp__atlassian__createJiraIssue",
       "mcp__atlassian__getTransitionsForJiraIssue",
-      "mcp__atlassian__transitionJiraIssue"
+      "mcp__atlassian__transitionJiraIssue",
+      "WebFetch(domain:developer.atlassian.com)",
+      "WebSearch"
     ]
   },
   "enabledMcpjsonServers": [

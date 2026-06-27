@@ -102,9 +102,9 @@ these are the buttons you actually press.
 
 | Diagram band | What the code actually does | Driven by |
 |---|---|---|
-| Input Sources | Pulls LBVOICESER tickets in **"Ready for testing"** from Jira via MCP (JQL), skipping already-processed labels | `/qa-start` Step 1 |
-| Requirement Analysis Agent | Scores each ticket SUFFICIENT / INSUFFICIENT — parses HTTP method, endpoint, ACs from free text; never guesses | `context-check.md` |
-| (insufficient branch) | Posts a structured comment to the assignee + stamps `qa-context-requested` | `story-update.md` |
+| Input Sources | Pulls LBVOICESER tickets in **"Ready for testing"** from Jira via MCP (JQL), skipping the done `qa-auto-generated` label; `qa-context-requested` tickets are re-fetched and re-evaluated once edited since the request comment | `/qa-start` Step 1 |
+| Requirement Analysis Agent | Scores each ticket SUFFICIENT / INSUFFICIENT — parses HTTP method, endpoint, ACs from free text; never guesses. Re-eval gate: a `qa-context-requested` ticket is re-checked only when `updated >` its `[qa-auto:context-request]` comment; sufficient → drop label + proceed, still short → stay silent | `context-check.md` |
+| (insufficient branch) | Stamps `qa-context-requested`, then posts a structured `[qa-auto:context-request]`-tagged comment to the assignee (label-first, comment-last) | `story-update.md` |
 | Test Generation Agent (Stage A) | Builds a test-case plan table, writes it to `qa/plans/<KEY>-plan.md`, opens it in an editor tab | `test-generation.md` Stage A |
 | 🚦 Gate 1 — Test Case Review | **You pause.** Edit the plan file / Review notes / chat, then approve | end of `/qa-start` |
 | Test Generation Agent (Stage B) | Generates the JUnit 5 + REST Assured Java class, annotates `@Requirement`/`@XrayTest`, compiles with `mvn -q test-compile` | `/qa-approve` |

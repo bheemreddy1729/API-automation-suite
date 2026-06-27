@@ -18,9 +18,15 @@ and give a concrete example for each so they can fix the ticket in one pass.
 3. For EACH missing field, write a numbered item: the field name in bold, one line of
    why it's needed, and a concrete `example`. Only include items that are actually
    missing (do not dump the whole checklist).
-4. Close with the standard re-evaluation note and sign off as "QA Automation".
-5. Post the comment via the Atlassian MCP (`addCommentToJiraIssue`) on the ticket.
-6. Hand back to the orchestrator, which stamps the `qa-context-requested` label.
+4. Close with the standard re-evaluation note, sign off as "QA Automation", and end with
+   the literal sentinel line `[qa-auto:context-request]` on its own line. **This sentinel
+   is mandatory** — the orchestrator's timestamp gate keys off "the latest comment whose
+   body contains `[qa-auto:context-request]`", not on the prose, so it must be present and
+   exact on every context-request comment.
+5. Order of writes (orchestrator): stamp the `qa-context-requested` label **first**, then
+   post this comment **last** via the Atlassian MCP (`addCommentToJiraIssue`). Comment-last
+   keeps the issue's `updated` ≈ this comment's `created`, so the re-eval gate stays false
+   until a human edits the ticket — the label write never self-triggers a re-evaluation.
 
 ### Canonical field → example map
 | Field | Example |
@@ -34,6 +40,11 @@ and give a concrete example for each so they can fix the ticket in one pass.
 
 ## Rules
 - Post EXACTLY ONE comment per ticket per sync. Never double-post.
+- **Re-evaluation is silent.** This prompt fires only for a *fresh* INSUFFICIENT ticket
+  or the self-heal case (labeled but the sentinel comment is missing). A ticket that was
+  already `qa-context-requested` and is **still INSUFFICIENT after a human edit gets NO
+  new comment** — it keeps its label and existing comment; the orchestrator stays silent.
+  Do not re-post the now-different missing fields.
 - Do not change status, assignee, or any field other than (via the orchestrator) the
   `qa-context-requested` label.
 - Keep the wording aligned with the established template already used on the project
@@ -58,14 +69,17 @@ information is needed before test automation can begin:
 
 ... (only the missing items) ...
 
-Please update the ticket with the above details. Once updated, the next sync cycle will
-automatically re-evaluate the ticket for test generation.
+Please update the ticket with the above details. Once you edit the ticket, the next sync
+cycle will automatically re-evaluate it for test generation — no need to remove any label.
 
 Thanks,
 QA Automation
+[qa-auto:context-request]
 ```
 
 ## Fallback Action
 - If the assignee is unset → address the comment to "team" and still post it.
-- If the comment POST fails → report the failure to the orchestrator and do NOT stamp
-  the label (so the ticket is retried next sync).
+- If the comment POST fails → report the failure to the orchestrator. The label was
+  already stamped (step 5), so the ticket carries `qa-context-requested` with no sentinel
+  comment; next sync's re-eval gate detects the missing sentinel and self-heals by posting
+  the comment then (still exactly one comment — no duplicate).

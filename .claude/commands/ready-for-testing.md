@@ -21,7 +21,10 @@ if anything below is ambiguous. Prompt definitions live in `.claude/prompts/`.
 - cloudId: `86a735d2-77c1-49d1-a610-0f381e05ed90`  (site `laerdal.atlassian.net`)
 - Project: `LBVOICESER`
 - Trigger status: **"Ready for testing"**  (NOT "Ready for QA")
-- Skip labels: `qa-auto-generated`, `qa-context-requested`
+- Labels: `qa-auto-generated` = done, **always skipped**. `qa-context-requested` =
+  awaiting author; **re-evaluated, not skipped**, once the ticket is edited after the
+  request comment (see Phase 2 timestamp gate). One `qa-auto:context-request`-tagged
+  comment per ticket; never double-posted.
 - Tests live in `src/test/java/com/laerdal/api/tests/`; run with `mvn test`.
 
 ---
@@ -31,20 +34,47 @@ Use Atlassian MCP `searchJiraIssuesUsingJql` with:
 
 ```
 project = LBVOICESER AND status = "Ready for testing" AND issuetype IN (Story, Task)
-AND (labels IS EMPTY OR (labels NOT IN ("qa-auto-generated","qa-context-requested")))
+AND (labels IS EMPTY OR labels NOT IN ("qa-auto-generated"))
 ORDER BY updated DESC
 ```
 
 > Note: requirement tickets in this project are authored as **Story** *or* **Task**
 > (e.g. LBVOICESER-1334/1335 are Tasks). Do not narrow this to Story only.
+>
+> The query intentionally **keeps `qa-context-requested` tickets in the result** (only
+> the completed `qa-auto-generated` label is excluded). Those re-entered tickets are
+> filtered by the timestamp gate in Phase 2 — JQL alone cannot express "edited after
+> the request comment", so that gate lives in the orchestrator.
 
-Fetch fields: `summary, description, status, issuetype, labels, assignee, comment`.
+Fetch fields: `summary, description, status, issuetype, labels, assignee, comment,
+updated`. (`updated` and `comment` drive the Phase 2 re-evaluation gate.)
 Report the count. If zero, stop and say so.
 
-## Phase 2 — Context check (per ticket)
-For each ticket, apply `.claude/prompts/context-check.md`. Collect each ticket's
-`verdict` (SUFFICIENT / INSUFFICIENT / ERROR) and its `detected` / `missing` blocks.
-Print a one-line-per-ticket summary table.
+## Phase 2 — Context check + re-evaluation gate (per ticket)
+Classify each fetched ticket first, then evaluate:
+
+**A. Fresh ticket** (no `qa-context-requested` label) — evaluate normally: apply
+`.claude/prompts/context-check.md` and collect its `verdict`
+(SUFFICIENT / INSUFFICIENT / ERROR) + `detected` / `missing` blocks.
+
+**B. Re-evaluation candidate** (has `qa-context-requested`) — apply the timestamp gate:
+1. Find the **latest** comment whose body contains the sentinel `[qa-auto:context-request]`
+   and read its `created` timestamp.
+   - **No sentinel comment found** (label present but the request comment never landed —
+     e.g. a prior post failed): treat as a fresh INSUFFICIENT ticket. Run context-check;
+     if INSUFFICIENT it self-heals via Phase 4b (this is the *first* comment, so it is not
+     a duplicate).
+2. If `fields.updated > <sentinel comment>.created` → the author edited the ticket since
+   we asked → **re-run** context-check:
+   - **SUFFICIENT** → remove the `qa-context-requested` label (MCP `editJiraIssue`) and
+     proceed to Phase 3 (plan) like any sufficient ticket.
+   - **INSUFFICIENT** → **stay silent**: keep the label, post **no** comment, skip the
+     ticket. (Do not re-comment with the now-different missing fields.)
+3. Else (`updated <= <sentinel comment>.created` — untouched since the request) → skip
+   silently; no context-check needed.
+
+Print a one-line-per-ticket summary table (mark each row fresh / re-eval→sufficient /
+re-eval→still-insufficient / waiting-on-author).
 
 ## Phase 3 — Gate 1: test-case plan  (SUFFICIENT tickets only)
 For each SUFFICIENT ticket, apply Stage A of `.claude/prompts/test-generation.md` to
@@ -66,9 +96,19 @@ the user to **approve / edit / reject** per ticket.
 - **Reject** → delete the generated file(s); ticket NOT labelled; no Test card created.
 
 ### Phase 4b — Insufficient path (parallel)
-For each INSUFFICIENT ticket, apply `.claude/prompts/story-update.md`: post the
-structured comment via MCP `addCommentToJiraIssue`, then stamp the
-`qa-context-requested` label (MCP `editJiraIssue`). One comment per ticket per sync.
+Applies only to **fresh** INSUFFICIENT tickets and the self-heal case from Phase 2-B
+(labeled but missing its sentinel comment). A **re-eval candidate that is still
+INSUFFICIENT gets nothing here** — it already has its comment + label; stay silent.
+
+For each such ticket, apply `.claude/prompts/story-update.md`. **Write order matters:**
+stamp the `qa-context-requested` label first (MCP `editJiraIssue`), then post the
+structured comment **last** (MCP `addCommentToJiraIssue`) so the comment is the final
+mutation. This keeps `fields.updated ≈ <sentinel comment>.created`, so the Phase 2 gate
+(`updated > comment.created`) stays **false** until a human actually edits the ticket —
+the bot's own label write never re-triggers a re-eval. The comment must carry the
+`[qa-auto:context-request]` sentinel. One comment per ticket per sync; never double-post.
+If the comment POST fails, report it and leave the ticket — next sync's Phase 2-B
+self-heal (label present, no sentinel comment) re-posts cleanly.
 
 ## Phase 5 — Create the Xray Test card + link to parent  (approved scripts only)
 Apply `.claude/prompts/test-card.md` (Stages 1-2) for each approved ticket:
@@ -82,7 +122,10 @@ Apply `.claude/prompts/test-card.md` (Stages 1-2) for each approved ticket:
   Test card, reuse that card.
 
 ## Phase 6 — Execute (human-triggered)
-Do NOT auto-run. Tell the user the exact command and wait for them to run it:
+When execution begins, **transition the linked Test card → "In Progress"** (resolve the id
+by name via `getTransitionsForJiraIssue`, then `transitionJiraIssue`) so the card reflects
+that testing has started. Then do NOT auto-run — tell the user the exact command and wait
+for them to run it:
 ```
 mvn test -Dtest=<ClassA,ClassB>        # the approved classes
 mvn allure:report                       # or: mvn allure:serve
@@ -98,9 +141,10 @@ Once the user confirms the run finished, continue to Phase 7.
 - Update the **parent**: on all-pass → stamp `qa-auto-generated`; on any failure →
   post a comment @-mentioning the parent's reporter with the failing methods
   (no `qa-auto-generated` label, so it reprocesses after a fix).
-- **Transition the Test card by result** (MCP `getTransitionsForJiraIssue` to resolve the
-  transition id by name on that card, then `transitionJiraIssue`): all tests pass →
-  **Done**; any failure → leave **Open** (so the red card is visible until fixed).
+- **Transition the Test card by result** (out of "In Progress"; MCP
+  `getTransitionsForJiraIssue` to resolve the transition id by name on that card, then
+  `transitionJiraIssue`): all tests pass → **Done**; any failure → back to **Open** (so the
+  red card is visible until fixed).
 - **Do NOT transition the parent** ticket, pass or fail. On all-pass its only change is
   the `qa-auto-generated` label; on failure it stays in "Ready for testing" (unlabelled)
   so it re-queues. (Workflow policy confirmed 2026-06-26.)
@@ -144,8 +188,15 @@ recurring judgement calls are pre-decided here — apply them directly:
 7. **Allure report:** serve it automatically (Phase 7 / `/qa-run` step 2) and surface the
    URL; don't wait to be asked.
 8. **Status transitions are rule-driven, not ask-driven** (policy confirmed 2026-06-26):
-   Test card → **Done** on all-pass, left **Open** on any failure; the **parent is never
+   Test card lifecycle = created+linked **Open** → **In Progress** when the run starts →
+   **Done** on all-pass / back to **Open** on any failure. The **parent is never
    transitioned** (label-only on pass, stays "Ready for testing" on fail). Apply directly.
+9. **Timestamp-aware re-evaluation is rule-driven** (Phase 2-B). A `qa-context-requested`
+   ticket re-enters the loop *only* when `fields.updated > <sentinel comment>.created`.
+   On re-eval: SUFFICIENT → **remove the label** (authorized implicitly, same as rule 5)
+   and proceed; still INSUFFICIENT → **stay silent** (keep label, no second comment).
+   Never post a duplicate context-request comment; the `[qa-auto:context-request]`
+   sentinel is the single source of truth for "already asked". Apply directly.
 
 **Still ASK / don't auto-decide:** the two gates (Phase 3 plan, Phase 4 script); anything a
 Hard rule marks ASK.
