@@ -11,7 +11,7 @@ Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/d
 🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
 the SCM/admin/security conversation does).
 
-> **Status: architecture CONVERGED** (rounds 1–6; Claude + Perplexity + Gemini independently
+> **Status: architecture CONVERGED** (rounds 1–7; Claude + Perplexity + Gemini independently
 > aligned on the core, adding only refinements/roadmap on top). Remaining 🔄 items resolve when
 > the pilot team is picked; 🚩 items need the org. **Next step = execution, not more AI rounds.**
 
@@ -44,6 +44,11 @@ the SCM/admin/security conversation does).
 - **Structural isolation enforcement** *(round 6)*: a missing `tenantId` fails at **CI/compile**,
   not runtime; **contract tests** cover both MCP + REST backends; §12 is treated as a **hard
   contract**, not a suggestion.
+- **Per-tenant customization = base + config-driven overrides** *(round 7, user's idea)*: layered
+  prompts/conventions per tenant via **config, not class inheritance** (tenancy is **data** →
+  onboard by config, no per-tenant deploy). Overrides confined to tunable areas; **core
+  safety/governance prompts immutable + applied last**; overrides versioned + lead-approved.
+  Seam designed in Phase 1, override tooling Phase 2+. (§9.2)
 
 ### 🔄 Open / debated
 - Lead-facing **web UI / GraphQL API** — needed when? (Perplexity earlier; Claude: defer.)
@@ -299,6 +304,36 @@ checklist Security can audit:
 > serving one pilot team first. That is simultaneously "a repo," "a service," and the seed of "a
 > product" — the confusion dissolves once you stop treating them as alternatives.
 
+### 9.2 Per-tenant customization model (base + overrides) — *config, not inheritance*
+
+How does team B's agent differ from team A's? Through a **layered customization model**: a shared
+**base** (core prompts, conventions, lifecycle) that each tenant **overlays** with its own
+project-specific instructions — domain nuances, coding standards, extra assertions (e.g.
+hardware-in-the-loop constraints for a device team; specific API-verification rules for a backend
+team).
+
+**Adopt the layering; implement it as config, not class inheritance.** "A base *Master Class* that
+tenants subclass/override" is the right *mental model* but the wrong *implementation*:
+- Literal per-tenant subclasses put tenant config **in code** → onboarding a team needs a code
+  change + deploy, which **breaks the decided "onboard by config, not code"** principle and
+  reintroduces drift + release coupling. **Tenancy must be data, not subclasses.**
+- Correct pattern: **one immutable engine that composes prompts at runtime** — base template +
+  per-tenant overlay fragments merged from config. "Inheritance" = config-merge, not `extends`.
+
+**Guardrails (non-negotiable — doubly so for medical):**
+- Overrides are confined to **designated tunable areas** (conventions, stack specifics, extra
+  checks). They **cannot** touch core **routing, auth, isolation, or safety/governance**
+  instructions (HITL gates, data-handling/redaction, kill switch).
+- Core safety/governance prompt sections are **applied last and immutable** — an overlay can *add*
+  behavior but cannot *weaken* a gate or a redaction rule. (Stops a careless/malicious override
+  from disabling HITL or leaking data.)
+- Overrides are **versioned + reviewed** (ties to prompt/agent versioning) and approved by the QA
+  lead + platform owner before taking effect.
+
+**Timing:** design the **seam** in Phase 1 (prompts loaded as the one tenant's config/overlay, even
+with a single tenant) so it isn't retrofitted; build the multi-tenant override **tooling**
+(authoring, review, per-tenant prompt store) in Phase 2+.
+
 ## 10. What to ask in the SCM / platform discussion
 
 > Bring the right people: **SCM/DevOps** (repo, CI, hosting), the **Atlassian org admin**
@@ -366,6 +401,7 @@ each with the trigger that would justify it. None of them changes the Phase-1 pi
 | Lead-facing web UI / GraphQL API | Approvals work in Jira | Leads need cross-project dashboards / non-Jira approval UX |
 | Full policy engine | Config guardrails + human gates suffice | Rules outgrow config; need dynamic, auditable policy |
 | act-as-user OAuth | Service account covers autonomous runs | A flow needs per-user attribution ("done as Alice") |
+| Per-tenant override tooling (authoring / review / prompt store) | Pilot has one tenant's prompt set; the §9.2 *seam* is enough | A 2nd team needs its own prompt overlays |
 
 > Rule of thumb: **design the seams now (so these slot in), build only the pilot's path.**
 >
