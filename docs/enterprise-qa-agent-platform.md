@@ -16,8 +16,13 @@ the SCM/admin/security conversation does).
   human gates (plan + script) are kept per team. *(round 1)*
 - **Transport = hybrid:** REST + service account for autonomous/headless; **Rovo MCP** for
   interactive/act-as-user. Both proven (REST client built; MCP probe passed). *(round 1)*
-- **Delivery = ONE central multi-tenant service**, not per-team deployments. "Start small"
-  = small in **tenants & scope**, not topology. *(revised round 2, after Perplexity)*
+- **Delivery = central-but-small is the DEFAULT** (one service, config-onboarding, no team
+  runs infra) with **per-tenant credential + execution isolation** inside it. **Per-team
+  deployment (Model B) is the documented fallback**, justified only if security vetoes central
+  credential custody, or pilot teams are infra-capable and want physical isolation for v1.
+  *(round 2 → central; round 3 → nuanced. The **final multi-team call is deferred**: Phase 1 is
+  **identical** under both models, so this fork does **not** gate building. Decide it at team #2,
+  informed by the security stance + pilot data.)*
 - **Centralize the brain, FEDERATE execution** to each team's existing CI; the platform is
   custodian of **Jira access only**, never teams' codebases/secrets/runtimes. *(round 2)*
 - **Identity:** per-team **service accounts** (MVP), least-privilege, in a secret manager,
@@ -194,8 +199,12 @@ call was wrong: forcing every team to deploy a container + manage secrets kills 
 serve only infra-savvy teams) and creates version drift — the opposite of "propagate cleanly."
 
 Three principles make the central model safe:
-1. **Per-team service accounts**, least-privilege scopes, in a secret manager, with audit + a
-   **kill switch** — this, not per-team deployment, is how you contain the custody concern.
+1. **Per-team service accounts** + **per-tenant credential & execution isolation** (each
+   tenant's token accessed only when acting for that tenant; per-tenant execution boundaries),
+   least-privilege scopes, in a secret manager, with audit + a **kill switch**. This — not
+   per-team deployment — is how you contain the custody/blast-radius concern. *Caveat:
+   multi-tenant isolation must be implemented carefully; per-team deployment gets isolation free
+   via physical separation — the main engineering argument for the Model B fallback.*
 2. **Execution federates to each team's existing CI.** The agent *triggers* the team's pipeline
    to run tests; the platform never centralizes anyone's source code, secrets, or runtimes. So
    the platform is custodian of **Jira access only**, never of teams' codebases — this is the
@@ -206,7 +215,14 @@ Three principles make the central model safe:
    only as real usage demands.
 
 > Per-team deployment (old Model B) remains a **fallback** only if security vetoes a central
-> service holding write-credentials to many projects. Default to central-but-small.
+> service holding write-credentials to many projects, or pilot teams are infra-capable and want
+> physical isolation for v1. Default to central-but-small.
+
+> **This fork does not gate Phase 1.** One pilot team = one service account = identical code
+> under either model; central-vs-per-team only diverges at team #2. So we pick central-but-small
+> as the **default direction**, document Model B as the fallback, and make the **final call at
+> the multi-team phase** — informed by the security stance (🚩) and real pilot adoption. Building
+> the pilot de-risks this more than further debate.
 
 > Concretely: **one repo**, deployed as **one central service** (container + scheduler/webhook),
 > serving one pilot team first. That is simultaneously "a repo," "a service," and the seed of "a
