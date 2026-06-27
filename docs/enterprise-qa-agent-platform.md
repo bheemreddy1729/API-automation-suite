@@ -11,6 +11,10 @@ Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/d
 🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
 the SCM/admin/security conversation does).
 
+> **Status: architecture CONVERGED** (rounds 1–5; Claude + Perplexity + Gemini independently
+> aligned on the core, adding only refinements/roadmap on top). Remaining 🔄 items resolve when
+> the pilot team is picked; 🚩 items need the org. **Next step = execution, not more AI rounds.**
+
 ### ✅ Decided
 - **Human model:** junior-QA-engineer agent; QA lead is the validator/director. The two
   human gates (plan + script) are kept per team. *(round 1)*
