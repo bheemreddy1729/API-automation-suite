@@ -39,6 +39,29 @@ Three options; the platform should be **hybrid (recommended)**.
 act-as-user for interactive sessions and any write a person should own. Both are governed by
 the org-admin Rovo MCP permissions + audit log, so security/compliance get one control plane.
 
+> **Clarify the "assume any identity" instinct.** You don't want *one* agent that impersonates
+> arbitrary people across every project — that's an impersonation/audit problem and a huge blast
+> radius. Mirror the human: a junior QA engineer has **one** account scoped to **their** team's
+> projects. So each team's agent runs as a **team-scoped identity** — a dedicated "Team X QA bot"
+> service account, or act-as-user OAuth for that team's members — never a universal impersonator.
+> "Broader Atlassian" (Confluence, etc.) rides the same identity; the Rovo MCP already exposes
+> those tools.
+
+### The human model we're automating
+
+| Human | Agent equivalent |
+|---|---|
+| Junior QA engineer (embedded in one team) | One agent **instance per team**, scoped to that team's projects + conventions |
+| Understands features, to-and-fro with dev | Reads tickets/ACs (+ comments) ; posts context-requests; reads replies |
+| Drafts test plan, **gets QA-lead approval** | Generates the plan ; **human gate = the QA lead approves/edits/rejects** |
+| Executes tests, updates the Jira Test card | Runs the suite, writes results + transitions the card (traceability via Xray) |
+| Reciprocates with dev + lead | Comments back, @-mentions, summary report |
+
+The QA **lead stays in the loop as the validator/director** — that's the existing two-gate
+design, kept per team. UI/path-based testing is the *same loop with a different runner*
+(Playwright/Selenium instead of REST-Assured) — roadmap, not MVP; the identity/delivery
+architecture below does **not** change for it.
+
 ## 4. Layered architecture
 
 ```
@@ -108,8 +131,77 @@ not of the model. Generation is currently Java/JUnit/REST-Assured; going multi-t
 6. **Build vs. adopt** — is there appetite to build the orchestration in-house vs. lean on an
    existing agent platform (e.g., Forge remote agents EAP) for the Jira-native parts?
 
-## 9. Immediate next step
+## 9. Delivery model — repo, service, or product? (resolving the confusion)
+
+These are **three lenses, not three choices** — you end up with all three:
+- **Repo** = where the code lives (always).
+- **Service** = a hosted runtime (a *deployment* choice).
+- **Product** = how teams discover, onboard, and get support (the org-facing wrapper).
+
+The real fork is **how it runs per team**:
+
+| | **Model A — Central multi-tenant service** | **Model B — Per-team packaged deployment** |
+|---|---|---|
+| Shape | One hosted platform; teams onboard by config | One repo ships a container/template each team runs |
+| Identity | Central **vault** holds many teams'/users' creds; service assumes the right one | Each team uses **its own** team identity; no central vault |
+| Pros | Max governance, central updates & visibility | Isolation by construction; team owns secrets; ship-versions-they-adopt |
+| Cons | **You** become custodian of org-wide Jira creds — large security/compliance surface; 24/7 ops | Drift across teams; harder to push updates centrally |
+
+**Recommendation: start Model B → graduate the proven path to Model A.** Begin with a
+per-team packaged deployment where each team runs the agent under its own scoped identity;
+once adoption and governance demand central visibility, promote the popular path into a
+managed central service. Rationale: it matches the human analogy (a junior embedded in **one**
+team with **one** scoped identity), and it defers the hardest problems — central credential
+custody, multi-tenant auth, always-on ops, and the compliance of a shared credential vault —
+until you've earned the right to take them on. For a medical-device org, *not* being the
+day-one custodian of everyone's Jira tokens is a feature.
+
+> Concretely for Phase 1: **one repo**, packaged as a **container + scheduled job** a team runs
+> with **its own service identity**. That is simultaneously "a repo," "a service," and the seed
+> of "a product" — the confusion dissolves once you stop treating them as alternatives.
+
+## 10. What to ask in the SCM / platform discussion
+
+> Bring the right people: **SCM/DevOps** (repo, CI, hosting), the **Atlassian org admin**
+> (identity, Rovo MCP governance), and **IT security/compliance** (data handling). Several
+> asks below are for the admin/security folks, not SCM — flag that when you book it.
+
+**A. Source control & CI/CD**
+- Where does the repo live (org GitHub/Bitbucket) and what's the access model?
+- Can CI hold **per-team secrets** securely (scoped, not shared)? Which runners?
+- If teams consume a shared container/template, what's the **versioning/release** model?
+
+**B. Atlassian administration** *(org admin)*
+- Can we provision **per-team service accounts** for the QA bot? Licensing impact?
+- If not, can we register an **OAuth 2.0 (3LO) app** (org-approved) for act-as-user?
+- Is **API-token Basic auth** permitted, or disabled by SSO policy? *(the `JiraConnectionIT`
+  smoke test answers this empirically — run it early.)*
+- Can the org **enable + govern the Rovo MCP server** — permissions tab, domain/IP allowlist,
+  audit log? Who administers it?
+- What **Jira permission granularity** can the bot identity get (ideally project-scoped)?
+
+**C. Identity & secrets**
+- Where do credentials live — **Key Vault / secrets manager**? Per-team scoping + **rotation**?
+- Who owns the credential lifecycle?
+
+**D. Hosting / runtime**
+- Approved hosting for an **always-on service or scheduled job** (Azure / container platform / k8s)?
+- Is **outbound egress to the Anthropic API** (and Atlassian) allowed from that environment?
+- **IP allowlist** coordination — Atlassian requires requests from allowlisted IPs.
+
+**E. Security & compliance** *(medical)*
+- **Data handling:** ticket content (descriptions, ACs, comments) is sent to the **Anthropic API**.
+  Approved? Need a DPA, region pinning, or Bedrock-in-region instead of the direct API?
+- Required **security review / threat model / pen-test** before org-wide rollout?
+- Audit & traceability expectations.
+
+**F. Ownership & support**
+- Who **owns** the platform long-term? On-call / SLAs?
+- How do teams **request onboarding** and support?
+
+## 11. Immediate next step
 
 Pick the Phase-1 target and identity model, then I scaffold the hosted loop on a new branch
-(`feature/qa-platform-phase1`) reusing `JiraClient` + the existing prompts. Everything above
-is reversible until we commit Phase 1.
+(`feature/qa-platform-phase1`) reusing `JiraClient` + the existing prompts — packaged per §9
+(container + scheduled job, team-scoped identity). Everything above is reversible until we
+commit Phase 1.
