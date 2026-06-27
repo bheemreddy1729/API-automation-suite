@@ -5,6 +5,45 @@
 > `feature/rovo-mcp-experiment` (proven custom-client MCP consumption).
 > **Owner:** Praveen (Laerdal). **Last updated:** 2026-06-27.
 
+## Decision log (updated each cross-review round)
+
+Convergence tracker for the multi-agent deliberation. ✅ decided · 🔄 open/debated ·
+🚩 gated on org facts (no amount of AI discussion settles these — only the smoke test +
+the SCM/admin/security conversation does).
+
+### ✅ Decided
+- **Human model:** junior-QA-engineer agent; QA lead is the validator/director. The two
+  human gates (plan + script) are kept per team. *(round 1)*
+- **Transport = hybrid:** REST + service account for autonomous/headless; **Rovo MCP** for
+  interactive/act-as-user. Both proven (REST client built; MCP probe passed). *(round 1)*
+- **Delivery = ONE central multi-tenant service**, not per-team deployments. "Start small"
+  = small in **tenants & scope**, not topology. *(revised round 2, after Perplexity)*
+- **Centralize the brain, FEDERATE execution** to each team's existing CI; the platform is
+  custodian of **Jira access only**, never teams' codebases/secrets/runtimes. *(round 2)*
+- **Identity:** per-team **service accounts** (MVP), least-privilege, in a secret manager,
+  with audit + **kill switch**; act-as-user OAuth added later where attribution matters.
+- **MVP scope discipline:** approvals in **Jira (no UI yet)**, one pilot team, read-only →
+  write-under-QA-lead-approval. Defer web UI / GraphQL API / policy engine.
+- **Framing:** design-as-product, implement-as-service, manage-in-repo (lenses, not choices).
+
+### 🔄 Open / debated
+- Lead-facing **web UI / GraphQL API** — needed when? (Perplexity earlier; Claude: defer.)
+- **Policy engine** — real engine vs simple config guardrails for MVP.
+- **Triggers** — scheduler vs Jira Automation webhook vs Slack command vs CI hook for MVP.
+- **Test-stack scope** — Java/REST first vs polyglot/UI from the start (UI is roadmap).
+- **Reasoning model hosting** — Anthropic API direct vs Bedrock-in-region (ties to compliance).
+
+### 🚩 Gated on org facts (SCM / Atlassian admin / security)
+- Does **SSO block API-token Basic auth**? *(the `JiraConnectionIT` smoke test answers this.)*
+- Can the org **provision per-team service accounts** (+ licensing), or must it be an OAuth
+  3LO app?
+- Can the org **enable + govern Rovo MCP** (permissions, IP/domain allowlist, audit log)?
+- **Hosting** target (Azure / k8s / internal app platform)?
+- **Compliance:** is sending ticket content to the Anthropic API approved? DPA / region pin /
+  Bedrock-in-region? What security review gates org-wide rollout?
+- Would security **veto a central service** holding write-credentials to many projects?
+  (If yes → per-team fallback per §9.)
+
 ## 1. Vision
 
 Turn the single-project LBVOICESER QA loop into an **internal platform** that *any* team,
