@@ -21,6 +21,12 @@ qa/
 experiments/**/node_modules/
 experiments/**/package-lock.json
 
+# Python engine artifacts
+engine/**/__pycache__/
+engine/**/*.egg-info/
+engine/.venv/
+*.pyc
+
 # Eclipse (keep .project/.classpath/.settings so the project opens directly;
 # ignore only transient Eclipse output)
 bin/
