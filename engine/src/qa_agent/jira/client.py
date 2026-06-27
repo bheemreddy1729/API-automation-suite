@@ -13,7 +13,13 @@ from ..tenant import TenantContext
 
 
 class JiraGateway(Protocol):
-    """All operations are tenant-scoped by signature (structural isolation)."""
+    """All operations are tenant-scoped by signature (structural isolation).
+
+    Backends: :class:`qa_agent.jira.rest_client.JiraRestClient` (headless, the autonomous loop) and
+    a future Rovo MCP client (interactive / act-as-user) — same contract, swappable.
+    """
+
+    def myself(self, tenant: TenantContext) -> dict[str, Any]: ...
 
     def search_jql(self, tenant: TenantContext, jql: str, fields: list[str]) -> list[dict[str, Any]]: ...
 
@@ -22,5 +28,24 @@ class JiraGateway(Protocol):
     def add_comment(self, tenant: TenantContext, key: str, body: str) -> None: ...
 
     def set_labels(self, tenant: TenantContext, key: str, add: list[str], remove: list[str]) -> None: ...
+
+    def create_issue(
+        self,
+        tenant: TenantContext,
+        project_key: str,
+        issue_type: str,
+        summary: str,
+        description: str | None = None,
+    ) -> str: ...
+
+    def create_issue_link(
+        self, tenant: TenantContext, type_name: str, inward_key: str, outward_key: str
+    ) -> None: ...
+
+    def get_transitions(self, tenant: TenantContext, key: str) -> list[dict[str, str]]: ...
+
+    def find_transition(
+        self, tenant: TenantContext, key: str, name: str
+    ) -> dict[str, str] | None: ...
 
     def transition(self, tenant: TenantContext, key: str, transition_id: str) -> None: ...
