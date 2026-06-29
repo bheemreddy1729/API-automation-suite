@@ -17,7 +17,7 @@ removed from the working tree. Nothing is lost — git history retains all of it
   `git show 878ce76:src/test/java/com/laerdal/api/tests/TtsPostApiTest.java`.
 - **The proven Java Jira REST client** (`JiraClient`, `Adf`, `JiraConfig`, `JiraException`) lives on
   `feature/jira-rest-connection` (commit `b8f4998`), under `src/main/java/com/laerdal/api/jira/`.
-  It is the **reference for the Python port** (`engine/src/qa_agent/jira/`).
+  It is the **reference for the Python port** (`qa_agent/jira/`).
 
 ## Why
 The engine generates tests and runs them **federated in each team's own repo/CI** (§9.3); it does

@@ -14,22 +14,24 @@ Jira/Xray. The engine never holds a team's source code, secrets, or runtime (§9
 `dispatch_execution` (trigger the team's CI) → `publish_results` (Xray Test card, transitions,
 comments). Gates are **headless and Jira-driven**; results are reported as **JUnit XML → Xray**.
 
-## Layout
-- `engine/` — the Python engine (see [engine/README.md](engine/README.md)). Start here.
+## Layout (standard LangGraph app, at the repo root)
+- `qa_agent/` — the engine package: `state.py` / `nodes/` / `edges.py` / `graph.py` plus
+  `models/`, `jira/`, `generation/`, `exec/`.
+- `langgraph.json` — points `langgraph dev` / Platform at the compiled `graph`.
+- `tests/`, `scripts/` — unit/isolation tests; smoke scripts + Xray references.
 - `docs/` — architecture & decisions ([enterprise-qa-agent-platform.md](docs/enterprise-qa-agent-platform.md)),
   Jira ground truth, history.
 - `.claude/` — the proven loop logic as prompts/commands (the spec the engine ports).
 - `experiments/` — feasibility probes (e.g. Rovo MCP consumption).
-- `scripts/` — Xray auth/import references (used by the federated runner).
 
 ## Getting started
 ```sh
-cd engine
 python -m venv .venv && . .venv/Scripts/activate    # Windows; use bin/activate on POSIX
 pip install -e ".[dev]"
 pytest                                               # structural-isolation tests
+langgraph dev                                        # optional: LangGraph Studio (visualize the graph)
 ```
-Fill `engine/.env` from `engine/.env.example` (git-ignored) for live Azure/Jira/GitHub access.
+Fill `.env` from `.env.example` (git-ignored) for live Azure/Jira/GitHub access.
 
 ## Identity & config
 A team is onboarded as a `TenantConfig` record (Jira project + target repo + language + credential

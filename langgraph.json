@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "qa_loop": "./src/qa_agent/graph.py:graph"
+    "qa_loop": "./qa_agent/graph.py:graph"
   },
   "env": "./.env"
 }

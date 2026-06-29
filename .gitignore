@@ -6,8 +6,6 @@ target/
 *.local
 cloud_auth.json
 .mcp.json
-# Tenant secrets (use tenants.properties.example as the committed template)
-src/test/resources/config/tenants.properties
 
 # Allure
 .allure/
@@ -22,9 +20,10 @@ experiments/**/node_modules/
 experiments/**/package-lock.json
 
 # Python engine artifacts
-engine/**/__pycache__/
-engine/**/*.egg-info/
-engine/.venv/
+**/__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
 *.pyc
 
 # Eclipse (keep .project/.classpath/.settings so the project opens directly;

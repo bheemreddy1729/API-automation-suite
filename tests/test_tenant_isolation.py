@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from qa_agent.config import TenantConfig, assert_project_allowed, resolve_test_language
 from qa_agent.tenant import CrossTenantError, TenantContext, require_tenant
