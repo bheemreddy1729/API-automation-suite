@@ -12,7 +12,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "langgraph-cli[inmem]>=0.1",   # `langgraph dev` — local dev server + Studio (graph visualization)
+]
 
 [build-system]
 requires = ["hatchling"]

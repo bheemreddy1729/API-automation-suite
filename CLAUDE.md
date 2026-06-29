@@ -12,8 +12,9 @@ Engine details: [engine/README.md](engine/README.md).
 ## Commands (run from `engine/`)
 - `pip install -e ".[dev]"` — install the engine + dev tools into a venv (`engine/.venv`).
 - `pytest` (or `python tests/test_tenant_isolation.py`) — run engine unit/isolation tests.
+- `langgraph dev` — local LangGraph dev server + Studio (reads `langgraph.json`; needs `.[dev]`).
 - `python -m qa_agent.models.azure_openai` — Azure model pre-flight (booleans only, no secrets).
-- `python scripts/azure_smoke.py` — live Azure connection smoke test.
+- `python scripts/azure_smoke.py` / `python scripts/jira_smoke.py` — live Azure / Jira smoke tests.
 
 ## Conventions
 - **Config / secrets:** never hard-code endpoints, tokens, repos, or model names. Read everything
@@ -35,14 +36,20 @@ Engine details: [engine/README.md](engine/README.md).
   service account yet.
 
 ## Structure (`engine/src/qa_agent/`)
+Follows the standard LangGraph layout (state / nodes / edges / graph), adapted to a structured
+package. `engine/langgraph.json` points `langgraph dev` / Platform at the compiled `graph` instance.
 - `tenant.py` — `TenantContext` (required id, no default).
 - `config.py` — `TenantConfig` + test-language resolution (default **python**) + project boundary.
+- `state.py` — `LoopState` (the graph state schema).
+- `nodes/` — one module per phase (`fetch`, `context_check`, `story_update`, `plan_gate`,
+  `generate`, `dispatch_execution`, `publish_results`).
+- `edges.py` — routing/conditional-edge logic (e.g. SUFFICIENT → plan_gate, else → story_update).
+- `graph.py` — assembles the `StateGraph`; exports `build_graph()` + a compiled `graph` instance.
 - `models/` — task-aware router + Azure backend (`build_chat_model`).
 - `jira/` — `JiraGateway` protocol + REST backend (port of the proven Java client).
 - `generation/` — pluggable per-stack generators (language chosen at generation time).
-- `graph.py` + `nodes/` — the loop as a LangGraph state graph (fetch → context_check → plan_gate →
-  generate → dispatch_execution → publish_results); headless Jira-driven gates via interrupt/resume.
 - `exec/` — GitHub dispatch/poll + Xray import.
+Headless Jira-driven gates use LangGraph interrupt/resume with a checkpointer.
 
 ## Loop logic reference
 The proven loop behavior (JQL, context-check scoring, insufficient-comment + sentinel, test-plan and

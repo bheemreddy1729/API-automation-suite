@@ -1,78 +1,50 @@
-"""The QA loop as a stateful graph (LangGraph). Phases mirror ``/ready-for-testing``.
+"""The QA loop as a LangGraph ``StateGraph``. Phases mirror ``/ready-for-testing``.
 
-This is the orchestration skeleton: each phase is a node, every node is tenant-scoped. LangGraph
-is imported lazily (inside ``build_graph``) so the core package stays import-light and the
-isolation tests run without it. Execution itself is FEDERATED to the team's CI (§9.3) — the
-``dispatch_execution`` node triggers the team's pipeline; the engine never runs the tests.
+Conventional LangGraph layout: state lives in ``state.py``, phase functions in ``nodes/``, routing
+in ``edges.py``; this module just *assembles* them and exposes a compiled ``graph`` instance for
+``langgraph.json`` (LangGraph Platform / ``langgraph dev``). Every node is tenant-scoped, and
+execution FEDERATES to the team's CI (§9.3) — ``dispatch_execution`` triggers the team's pipeline;
+the engine never runs the tests.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from langgraph.graph import END, StateGraph
 
-from .tenant import TenantContext, require_tenant
-
-
-@dataclass
-class LoopState:
-    tenant: TenantContext
-    ticket_key: str | None = None
-    verdict: str | None = None             # SUFFICIENT | INSUFFICIENT | ERROR
-    test_language: str = "python"          # resolved at plan start (gate input; default python)
-    plan: dict[str, Any] | None = None
-    approved: bool = False                 # human gate result
-    results: dict[str, Any] | None = None
+from . import nodes
+from .edges import route_after_context_check
+from .state import LoopState
 
 
-# --- phase nodes (tenant-scoped stubs; Phase 1 TODO) -------------------------
-def fetch(state: LoopState) -> LoopState:
-    require_tenant(state.tenant)
-    raise NotImplementedError("fetch: timestamp-aware JQL via JiraGateway")
+def build_graph(*, checkpointer=None):
+    """Wire the phases into a compiled ``StateGraph``.
 
-
-def context_check(state: LoopState) -> LoopState:
-    require_tenant(state.tenant)
-    raise NotImplementedError("context_check: classification model via the router")
-
-
-def plan_gate(state: LoopState) -> LoopState:
-    # Human gate (in Jira). Also where the test-script language is confirmed (default python).
-    require_tenant(state.tenant)
-    raise NotImplementedError("plan_gate: generate plan + QA-lead approve/edit/reject")
-
-
-def generate(state: LoopState) -> LoopState:
-    require_tenant(state.tenant)
-    raise NotImplementedError("generate: get_generator(state.test_language) + coding model")
-
-
-def dispatch_execution(state: LoopState) -> LoopState:
-    # Federated execution (§9.3): trigger the team's GitHub Actions workflow. We do NOT run tests here.
-    require_tenant(state.tenant)
-    raise NotImplementedError("dispatch_execution: trigger the team CI workflow_dispatch")
-
-
-def publish_results(state: LoopState) -> LoopState:
-    require_tenant(state.tenant)
-    raise NotImplementedError("publish_results: update Jira/Xray, transition card, comment")
-
-
-def build_graph():
-    """Wire the phases into a LangGraph ``StateGraph`` (lazy import)."""
-    from langgraph.graph import END, StateGraph
-
+    SUFFICIENT tickets flow fetch → context_check → plan_gate → generate → dispatch_execution →
+    publish_results; INSUFFICIENT/ERROR branch to story_update and end. Pass a ``checkpointer``
+    (M3) to persist state across runs for the headless Jira-driven gates.
+    """
     g = StateGraph(LoopState)
-    g.add_node("fetch", fetch)
-    g.add_node("context_check", context_check)
-    g.add_node("plan_gate", plan_gate)
-    g.add_node("generate", generate)
-    g.add_node("dispatch_execution", dispatch_execution)
-    g.add_node("publish_results", publish_results)
+    g.add_node("fetch", nodes.fetch)
+    g.add_node("context_check", nodes.context_check)
+    g.add_node("story_update", nodes.story_update)
+    g.add_node("plan_gate", nodes.plan_gate)
+    g.add_node("generate", nodes.generate)
+    g.add_node("dispatch_execution", nodes.dispatch_execution)
+    g.add_node("publish_results", nodes.publish_results)
+
     g.set_entry_point("fetch")
     g.add_edge("fetch", "context_check")
-    g.add_edge("context_check", "plan_gate")
+    g.add_conditional_edges(
+        "context_check",
+        route_after_context_check,
+        {"plan_gate": "plan_gate", "story_update": "story_update"},
+    )
+    g.add_edge("story_update", END)            # insufficient: comment posted, await the author
     g.add_edge("plan_gate", "generate")
     g.add_edge("generate", "dispatch_execution")
     g.add_edge("dispatch_execution", "publish_results")
     g.add_edge("publish_results", END)
-    return g.compile()
+    return g.compile(checkpointer=checkpointer)
+
+
+# Compiled instance referenced by langgraph.json (LangGraph Platform / `langgraph dev`).
+graph = build_graph()
